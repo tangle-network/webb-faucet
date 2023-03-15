@@ -1,35 +1,33 @@
 use egg_mode::Token;
+use model::Authorization;
 use std::marker::PhantomData;
-use std::path::Path;
 
-use authorization::Authorizations;
 use twitter::TwitterClient;
 
-mod authorization;
 pub mod db;
 pub mod model;
 pub mod twitter;
 
 pub use db::AuthDb;
-pub use model::{Access, Authorization, Identity, Provider, UserInfo};
+pub use model::{Provider, UserInfo};
 
-pub struct Authorizer<A> {
+pub struct Authorizer<A: AuthDb> {
     _auth_db: PhantomData<A>,
-    authorizations: Authorizations,
-    twitter_client: TwitterClient,
+    twitter_client: TwitterClient<A::Error>,
 }
 
 impl<A: AuthDb> Authorizer<A> {
-    pub async fn open<P: AsRef<Path>>(
-        authorizations_path: P,
+    pub async fn open(
         twitter_client_id: &str,
         twitter_client_secret: &str,
         twitter_redirect_uri: &str,
     ) -> Result<Self, Error<A::Error>> {
-        println!("Opening authorizations file: {:?}", authorizations_path.as_ref());
+        println!(
+            "Setting up Authorizer with Twitter client ID: {}",
+            twitter_client_id
+        );
         Ok(Self {
             _auth_db: PhantomData,
-            authorizations: Authorizations::open(authorizations_path)?,
             twitter_client: TwitterClient::new(
                 twitter_client_id,
                 twitter_client_secret,
@@ -47,10 +45,9 @@ impl<A: AuthDb> Authorizer<A> {
             .await
             .map_err(Error::AuthDb)?
         {
-            let identity = Identity::Twitter { id };
-            let access = self.authorizations.lookup(&identity);
-
-            Ok(Some(Authorization::new(identity, access)))
+            A::save_authorization(connection, id)
+                .await
+                .map_err(Error::AuthDb)
         } else {
             Ok(None)
         }
@@ -95,22 +92,18 @@ impl<A: AuthDb> Authorizer<A> {
     pub async fn get_user_info(
         &self,
         connection: &A::Connection,
-        identity: &Identity,
+        id: &u64,
     ) -> Result<Option<UserInfo>, Error<A::Error>> {
-        Ok(match identity {
-            Identity::Twitter { id } => A::get_twitter_name(connection, *id)
-                .await
-                .map_err(Error::AuthDb)?,
-        })
+        Ok(A::get_twitter_name(connection, *id)
+            .await
+            .map_err(Error::AuthDb)?)
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error<E: std::error::Error> {
-    #[error("Twitter client error")]
-    TwitterClient(#[from] twitter::Error),
-    #[error("Authorizations file error")]
-    Authorizations(#[from] authorization::Error),
+    #[error("Twitter API error")]
+    TwitterApi(#[from] egg_mode::error::Error),
     #[error("Auth DB error")]
     AuthDb(E),
 }

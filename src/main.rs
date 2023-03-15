@@ -27,17 +27,14 @@ fn provider_fairing<P: IsProvider>() -> impl Fairing {
 #[derive(Deserialize)]
 pub struct AppConfig {
     db: String,
-    authorization: String,
     domain: Option<String>,
     default_login_redirect_uri: rocket::http::uri::Reference<'static>,
 }
 
 async fn init_authorization(rocket: &Rocket<Build>) -> Option<SledAuthorizer> {
     let twitter_config = OAuthConfig::from_figment(rocket.figment(), "twitter").ok()?;
-    let config = rocket.state::<AppConfig>()?;
 
     Authorizer::open(
-        &config.authorization,
         twitter_config.client_id(),
         twitter_config.client_secret(),
         twitter_config.redirect_uri()?,

@@ -1,7 +1,7 @@
-use super::authorization::Error;
-use flagset::{flags, FlagSet};
 use std::fmt::Display;
 use std::str::FromStr;
+
+use chrono::{DateTime, Utc};
 
 pub mod providers {
     use super::{IsProvider, Provider};
@@ -59,35 +59,10 @@ impl FromStr for Provider {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Identity {
-    Twitter { id: u64 },
-}
-
-impl Identity {
-    pub fn provider(&self) -> Provider {
-        match self {
-            Identity::Twitter { .. } => Provider::Twitter,
-        }
-    }
-
-    pub fn for_provider(provider: Provider, id: &str, name: &str) -> Result<Identity, Error> {
-        match provider {
-            Provider::Twitter => {
-                let id = id
-                    .parse::<u64>()
-                    .map_err(|_| Error::InvalidIdentifier(id.to_string()))?;
-                Ok(Identity::Twitter { id })
-            }
-        }
-    }
-}
-
-flags! {
-    pub enum Access: u8 {
-        Admin,
-        Trusted,
-    }
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum Access {
+    Admin,
+    Trusted,
 }
 
 impl Access {
@@ -98,9 +73,9 @@ impl Access {
         }
     }
 
-    pub fn from_label(s: &str) -> Result<FlagSet<Self>, Error> {
+    pub fn from_label(s: &str) -> Result<Access, Error> {
         match s {
-            "admin" => Ok(Access::Admin | Access::Trusted),
+            "admin" => Ok(Access::Admin),
             "trusted" => Ok(Access::Trusted.into()),
             other => Err(Error::InvalidAccess(other.to_string())),
         }
@@ -113,30 +88,53 @@ impl Display for Access {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Authorization {
-    pub identity: Identity,
-    access: FlagSet<Access>,
+    pub identity: u64,
+    pub access: Access,
+    pub has_claimed_date: Option<DateTime<Utc>>,
 }
 
 impl Authorization {
-    pub fn new<I: Into<FlagSet<Access>>>(identity: Identity, access: I) -> Self {
+    pub fn new(identity: u64, access: Access) -> Self {
         Self {
             identity,
             access: access.into(),
+            has_claimed_date: None,
+        }
+    }
+
+    pub fn update_claimed_date(&mut self, date: DateTime<Utc>) {
+        self.has_claimed_date = Some(date);
+    }
+
+    pub fn is_claim_older_than_one_day(&self) -> bool {
+        match self.has_claimed_date {
+            Some(date) => date < Utc::now() - chrono::Duration::days(1),
+            None => true,
         }
     }
 
     pub fn provider(&self) -> Provider {
-        self.identity.provider()
+        Provider::Twitter
     }
 
     pub fn is_admin(&self) -> bool {
-        self.access.contains(Access::Admin)
+        match self.access {
+            Access::Admin => true,
+            _ => false,
+        }
     }
 
     pub fn is_trusted(&self) -> bool {
-        self.access.contains(Access::Trusted)
+        match self.access {
+            Access::Admin | Access::Trusted => true,
+            _ => false,
+        }
+    }
+
+    pub fn date_updated(&self) -> Option<DateTime<Utc>> {
+        self.has_claimed_date
     }
 }
 
@@ -167,4 +165,12 @@ impl UserInfo {
             Self::Twitter { address, .. } => address.clone(),
         }
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Invalid Access")]
+    InvalidAccess(String),
+    #[error("Invalid provider")]
+    InvalidProvider(String),
 }

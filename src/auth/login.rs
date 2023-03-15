@@ -1,13 +1,14 @@
-use super::super::{AppConfig, Auth, SledAuthorizer};
+use super::super::{AppConfig, SledAuthorizer};
 use crate::error::Error;
-use rocket::{http::CookieJar, response::Redirect, State};
+use rocket::{
+    http::{hyper::body::HttpBody, CookieJar},
+    response::Redirect,
+    State,
+};
 use rocket_oauth2::OAuth2;
 use serde::Serialize;
 use serde_json::Value;
-use webb_auth::{
-    model::{providers::Twitter, Provider, UserInfo},
-    Authorization,
-};
+use webb_auth::model::{providers::Twitter, Access, Authorization, Provider, UserInfo};
 
 #[derive(Default, Serialize)]
 struct LoginStatus {
@@ -18,25 +19,15 @@ struct LoginStatus {
 struct ProviderStatus {
     id: String,
     name: String,
-    access: Vec<&'static str>,
+    access: Access,
 }
 
 impl ProviderStatus {
     fn new(authorization: &Authorization, user_info: &UserInfo) -> Self {
-        let mut access = Vec::with_capacity(1);
-
-        if authorization.is_admin() {
-            access.push("admin");
-        }
-
-        if authorization.is_trusted() {
-            access.push("trusted");
-        }
-
         Self {
             id: user_info.id_str(),
             name: user_info.name(),
-            access,
+            access: authorization.access,
         }
     }
 }
@@ -83,7 +74,13 @@ pub async fn twitter(
     cookies: &CookieJar<'_>,
     authorizer: &State<SledAuthorizer>,
 ) -> Result<Redirect, Error> {
-    let request_token_key = authorizer.create_twitter_request_token().await?;
-
+    let request_token_key = authorizer
+        .create_twitter_request_token()
+        .await
+        .map_err(|e| {
+            println!("Error creating twitter request token: {}", e);
+            Error::Authorization(e)
+        })?;
+    println!("Creating twitter request token {}", request_token_key);
     Ok(oauth2.get_redirect_extras(cookies, &[], &[("oauth_token", &request_token_key)])?)
 }

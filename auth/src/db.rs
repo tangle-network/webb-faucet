@@ -1,6 +1,6 @@
 use egg_mode::Token;
 
-use crate::UserInfo;
+use crate::{model::Authorization, UserInfo};
 
 #[async_trait::async_trait]
 pub trait AuthDb {
@@ -43,4 +43,9 @@ pub trait AuthDb {
         access_key: &str,
         access_secret: &str,
     ) -> Result<(), Self::Error>;
+
+    async fn save_authorization(
+        connection: &Self::Connection,
+        id: u64,
+    ) -> Result<Option<Authorization>, Self::Error>;
 }

@@ -1,7 +1,10 @@
 use egg_mode::{KeyPair, Token};
 use rocket::State;
 use std::convert::TryFrom;
-use webb_auth::{AuthDb, UserInfo};
+use webb_auth::{
+    model::{Access, Authorization},
+    AuthDb, UserInfo,
+};
 
 /// SledStore is a store that stores the history of events in  a [Sled](https://sled.rs)-based database.
 #[derive(Clone)]
@@ -122,6 +125,20 @@ impl AuthDb for SledAuthDb {
             .insert(token, access_token_bytes)
             .map_err(Error::from)?;
         Ok(())
+    }
+
+    async fn save_authorization(
+        connection: &Self::Connection,
+        id: u64,
+    ) -> Result<Option<Authorization>, Self::Error> {
+        let id = u64_to_i64(id)?;
+        let authorizations_tree = connection.open_tree("authorizations").unwrap();
+        let authorization = Authorization::new(id.try_into().unwrap(), Access::Trusted);
+        let authorization_bytes = bincode::serialize(&authorization).unwrap();
+        authorizations_tree
+            .insert(&id.to_be_bytes(), authorization_bytes)
+            .map_err(Error::from)?;
+        Ok(Some(authorization))
     }
 }
 

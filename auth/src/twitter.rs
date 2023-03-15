@@ -1,20 +1,24 @@
 use chrono::{DateTime, Duration, Utc};
 use egg_mode::{auth::Token, KeyPair};
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
-pub struct TwitterClient {
+use crate::Error;
+
+pub struct TwitterClient<E: std::error::Error> {
     consumer_token: KeyPair,
     redirect_uri: String,
     request_tokens: RwLock<HashMap<String, (String, DateTime<Utc>)>>,
+    phantom: PhantomData<E>,
 }
 
-impl TwitterClient {
+impl<E: std::error::Error> TwitterClient<E> {
     pub fn new(client_id: &str, client_secret: &str, redirect_uri: &str) -> Self {
         Self {
             consumer_token: KeyPair::new(client_id.to_string(), client_secret.to_string()),
             redirect_uri: redirect_uri.to_string(),
             request_tokens: RwLock::new(HashMap::new()),
+            phantom: PhantomData,
         }
     }
 
@@ -26,7 +30,7 @@ impl TwitterClient {
             .retain(|_, (_, created)| (now - *created) < max_age)
     }
 
-    pub async fn create_request_token(&self) -> Result<String, Error> {
+    pub async fn create_request_token(&self) -> Result<String, Error<E>> {
         let request_token =
             egg_mode::auth::request_token(&self.consumer_token, &self.redirect_uri).await?;
         self.put_request_token(&request_token.key, &request_token.secret);
@@ -37,7 +41,7 @@ impl TwitterClient {
         &self,
         oauth_token: &str,
         oauth_verifier: &str,
-    ) -> Result<Option<(Token, u64, String)>, Error> {
+    ) -> Result<Option<(Token, u64, String)>, Error<E>> {
         if let Some(secret) = self.get_secret(oauth_token) {
             Ok(egg_mode::auth::access_token(
                 self.consumer_token.clone(),
@@ -66,10 +70,4 @@ impl TwitterClient {
             .remove(key)
             .map(|(secret, _)| secret)
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Twitter API error")]
-    TwitterApi(#[from] egg_mode::error::Error),
 }

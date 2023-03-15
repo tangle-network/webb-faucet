@@ -1,4 +1,4 @@
-use super::{error::Error, Auth, SledAuthorizer};
+use super::{error::Error, SledAuthorizer};
 use rocket::{http::CookieJar, State};
 use webb_auth::model::Provider;
 

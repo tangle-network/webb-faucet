@@ -1,7 +1,7 @@
 use crate::error::Error;
 
 use super::{
-    super::{AppConfig, Auth, SledAuthorizer},
+    super::{AppConfig, SledAuthorizer},
     get_token_cookie_name,
 };
 use rocket::{

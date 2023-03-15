@@ -26,6 +26,7 @@ impl<A: AuthDb> Authorizer<A> {
         twitter_client_secret: &str,
         twitter_redirect_uri: &str,
     ) -> Result<Self, Error<A::Error>> {
+        println!("Opening authorizations file: {:?}", authorizations_path.as_ref());
         Ok(Self {
             _auth_db: PhantomData,
             authorizations: Authorizations::open(authorizations_path)?,

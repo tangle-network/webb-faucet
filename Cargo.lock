@@ -3785,7 +3785,7 @@ dependencies = [
 [[package]]
 name = "rocket_oauth2"
 version = "0.5.0-rc.1"
-source = "git+https://github.com/webb-tools/rocket_oauth2?branch=next#6357433291d08e1bdcea4d51a45210aad8910d63"
+source = "git+https://github.com/webb-tools/rocket_oauth2?branch=next#77d88c10850085263802d14357a79ee27d3178fa"
 dependencies = [
  "async-trait",
  "base64 0.21.0",

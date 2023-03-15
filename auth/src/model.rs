@@ -52,7 +52,7 @@ impl FromStr for Provider {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.to_lowercase().as_ref() {
             "twitter" => Ok(Self::Twitter),
             other => Err(Error::InvalidProvider(other.to_string())),
         }

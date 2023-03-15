@@ -63,6 +63,7 @@ impl FromStr for Provider {
 pub enum Access {
     Admin,
     Trusted,
+    Untrusted,
 }
 
 impl Access {
@@ -70,6 +71,7 @@ impl Access {
         match self {
             Self::Admin => "admin",
             Self::Trusted => "trusted",
+            Self::Untrusted => "untrusted",
         }
     }
 

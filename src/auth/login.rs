@@ -1,10 +1,6 @@
 use super::super::{AppConfig, SledAuthorizer};
 use crate::error::Error;
-use rocket::{
-    http::{hyper::body::HttpBody, CookieJar},
-    response::Redirect,
-    State,
-};
+use rocket::{http::CookieJar, response::Redirect, State};
 use rocket_oauth2::OAuth2;
 use serde::Serialize;
 use serde_json::Value;

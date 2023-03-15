@@ -31,8 +31,15 @@ impl<E: std::error::Error> TwitterClient<E> {
     }
 
     pub async fn create_request_token(&self) -> Result<String, Error<E>> {
-        let request_token =
-            egg_mode::auth::request_token(&self.consumer_token, &self.redirect_uri).await?;
+        println!("Creating request token");
+        println!("Consumer token: {:?}", self.consumer_token);
+        println!("Redirect URI: {}", self.redirect_uri);
+        let request_token = egg_mode::auth::request_token(&self.consumer_token, &self.redirect_uri)
+            .await
+            .map_err(|e| {
+                println!("Error creating request token: {:?}", e);
+                Error::TwitterApi(e)
+            })?;
         self.put_request_token(&request_token.key, &request_token.secret);
         Ok(request_token.key.to_string())
     }

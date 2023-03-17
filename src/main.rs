@@ -91,6 +91,8 @@ fn rocket() -> _ {
                 }
             },
         ))
+        .attach(provider_fairing::<Twitter>())
+        .attach(CORS)
         .mount(
             "/",
             routes![
@@ -101,6 +103,4 @@ fn rocket() -> _ {
                 faucet::faucet,
             ],
         )
-        .attach(provider_fairing::<Twitter>())
-        .attach(CORS)
 }

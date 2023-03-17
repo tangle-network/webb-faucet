@@ -65,18 +65,10 @@ pub fn logout(cookies: &CookieJar<'_>, app_config: &State<AppConfig>) -> Redirec
 }
 
 #[get("/login/twitter")]
-pub async fn twitter(
-    oauth2: OAuth2<Twitter>,
-    cookies: &CookieJar<'_>,
-    authorizer: &State<SledAuthorizer>,
-) -> Result<Redirect, Error> {
-    let request_token_key = authorizer
-        .create_twitter_request_token()
-        .await
-        .map_err(|e| {
-            println!("Error creating twitter request token: {}", e);
-            Error::Authorization(e)
-        })?;
-    println!("Creating twitter request token {}", request_token_key);
-    Ok(oauth2.get_redirect_extras(cookies, &[], &[("oauth_token", &request_token_key)])?)
+pub async fn twitter(oauth2: OAuth2<Twitter>, cookies: &CookieJar<'_>) -> Result<Redirect, Error> {
+    Ok(oauth2.get_redirect_extras(
+        cookies,
+        &["tweet.read", "users.read", "follows.read", "offline.access"],
+        &[],
+    )?)
 }

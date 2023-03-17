@@ -1,10 +1,11 @@
+use chrono::{DateTime, Utc};
 use egg_mode::{KeyPair, Token};
-use rocket::State;
 use std::convert::TryFrom;
 use webb_auth::{
-    model::{Access, Authorization},
+    model::{Access, Authorization, ClaimsData},
     AuthDb, UserInfo,
 };
+use webb_proposals::TypedChainId;
 
 /// SledStore is a store that stores the history of events in  a [Sled](https://sled.rs)-based database.
 #[derive(Clone)]
@@ -12,7 +13,7 @@ pub struct SledAuthDb;
 
 #[async_trait::async_trait]
 impl AuthDb for SledAuthDb {
-    type Connection = State<sled::Db>;
+    type Connection = sled::Db;
     type Error = Error;
 
     async fn get_twitter_name(
@@ -139,6 +140,44 @@ impl AuthDb for SledAuthDb {
             .insert(&id.to_be_bytes(), authorization_bytes)
             .map_err(Error::from)?;
         Ok(Some(authorization))
+    }
+
+    async fn put_last_claim_date(
+        connection: &Self::Connection,
+        id: u64,
+        typed_chain_id: TypedChainId,
+        claim: ClaimsData,
+    ) -> Result<DateTime<Utc>, Self::Error> {
+        let id = u64_to_i64(id)?;
+        let last_claim_tree = connection
+            .open_tree(format!("claims-{:?}", typed_chain_id.chain_id()))
+            .unwrap();
+        let claims_data_bytes = bincode::serialize(&claim).unwrap();
+        last_claim_tree
+            .insert(&id.to_be_bytes(), claims_data_bytes)
+            .map_err(Error::from)?;
+        Ok(claim.last_claimed_date)
+    }
+
+    async fn get_last_claim_date(
+        connection: &Self::Connection,
+        id: u64,
+        typed_chain_id: TypedChainId,
+    ) -> Result<Option<DateTime<Utc>>, Self::Error> {
+        let id = u64_to_i64(id)?;
+        let last_claim_tree = connection
+            .open_tree(format!("claims-{:?}", typed_chain_id.chain_id()))
+            .unwrap();
+        let claims_date = last_claim_tree
+            .get(&id.to_be_bytes())
+            .map_err(Error::from)
+            .map(|row: Option<_>| {
+                row.map(|row| {
+                    let claim: ClaimsData = bincode::deserialize(&row).unwrap();
+                    claim.last_claimed_date
+                })
+            })?;
+        Ok(claims_date)
     }
 }
 

@@ -1,6 +1,11 @@
+use chrono::{DateTime, Utc};
 use egg_mode::Token;
+use webb_proposals::TypedChainId;
 
-use crate::{model::Authorization, UserInfo};
+use crate::{
+    model::{Authorization, ClaimsData},
+    UserInfo,
+};
 
 #[async_trait::async_trait]
 pub trait AuthDb {
@@ -48,4 +53,17 @@ pub trait AuthDb {
         connection: &Self::Connection,
         id: u64,
     ) -> Result<Option<Authorization>, Self::Error>;
+
+    async fn put_last_claim_date(
+        connection: &Self::Connection,
+        id: u64,
+        typed_chain_id: TypedChainId,
+        claim: ClaimsData,
+    ) -> Result<DateTime<Utc>, Self::Error>;
+
+    async fn get_last_claim_date(
+        connection: &Self::Connection,
+        id: u64,
+        typed_chain_id: TypedChainId,
+    ) -> Result<Option<DateTime<Utc>>, Self::Error>;
 }

@@ -2027,6 +2027,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hermit-abi"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2366,10 +2372,11 @@ checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "io-lifetimes"
-version = "1.0.6"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfa919a82ea574332e2de6e74b4c36e74d41982b335080fa59d4ef31be20fdf3"
+checksum = "76e86b86ae312accbf05ade23ce76b625e0e47a255712b7414037385a1c05380"
 dependencies = [
+ "hermit-abi 0.3.1",
  "libc",
  "windows-sys 0.45.0",
 ]
@@ -2982,6 +2989,62 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "oauth-credentials"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d6f9dee4cc95bd06fe0c1225a2b5680e0611627e1643ce78eb76daddd8dbccc"
+
+[[package]]
+name = "oauth1-request"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d98aea71f24f4d18cd58372672a640654fa657eddbd6b54ffd1007e25e8aee3"
+dependencies = [
+ "base64 0.13.1",
+ "bitflags",
+ "cfg-if",
+ "hmac 0.11.0",
+ "oauth-credentials",
+ "oauth1-request-derive",
+ "percent-encoding 2.2.0",
+ "rand 0.8.5",
+ "sha-1",
+]
+
+[[package]]
+name = "oauth1-request-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58659ed77836b3a2ec0b7d5e894d9b18880a45c3898be6332baf90daa0f06afb"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "oauth2"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eeaf26a72311c087f8c5ba617c96fac67a5c04f430e716ac8d8ab2de62e23368"
+dependencies = [
+ "base64 0.13.1",
+ "chrono",
+ "getrandom 0.2.8",
+ "http",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "sha2 0.10.6",
+ "thiserror",
+ "url 2.3.1",
 ]
 
 [[package]]
@@ -3635,10 +3698,12 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls",
+ "tokio-util",
  "tower-service",
  "url 2.3.1",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots 0.22.6",
  "winreg",
@@ -3773,19 +3838,21 @@ dependencies = [
  "percent-encoding 2.2.0",
  "pin-project-lite",
  "ref-cast",
+ "rustls 0.20.8",
+ "rustls-pemfile",
  "serde",
  "smallvec",
  "stable-pattern",
  "state",
  "time 0.3.20",
  "tokio",
+ "tokio-rustls",
  "uncased",
 ]
 
 [[package]]
 name = "rocket_oauth2"
 version = "0.5.0-rc.1"
-source = "git+https://github.com/webb-tools/rocket_oauth2?branch=next#77d88c10850085263802d14357a79ee27d3178fa"
 dependencies = [
  "async-trait",
  "base64 0.21.0",
@@ -3848,7 +3915,7 @@ checksum = "fd5c6ff11fecd55b40746d1995a02f2eb375bf8c00d192d521ee09f42bef37bc"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes 1.0.6",
+ "io-lifetimes 1.0.7",
  "libc",
  "linux-raw-sys 0.1.4",
  "windows-sys 0.45.0",
@@ -4243,6 +4310,15 @@ dependencies = [
  "indexmap",
  "itoa",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db0969fff533976baadd92e08b1d102c5a3d8a8049eadfd69d4d1e3c5b2ed189"
+dependencies = [
  "serde",
 ]
 
@@ -5775,6 +5851,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4f195fd851901624eee5a58c4bb2b4f06399148fcd0ed336e6f1cb60a9881df"
 
 [[package]]
+name = "twitter-v2"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a7610e778b6f3a156fa8c766a70b243dc06d253901a6e4d5b4c9b81d1486d64"
+dependencies = [
+ "async-trait",
+ "futures",
+ "oauth1-request",
+ "oauth2",
+ "percent-encoding 2.2.0",
+ "pin-project-lite",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "strum",
+ "thiserror",
+ "time 0.3.20",
+ "tokio",
+ "url 2.3.1",
+]
+
+[[package]]
 name = "twox-hash"
 version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6005,12 +6104,11 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "walkdir"
-version = "2.3.2"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "808cf2735cd4b6866113f648b791c6adc5714537bc222d9347bb203386ffda56"
+checksum = "36df944cda56c7d8d8b7496af378e6b16de9284591917d307c9b4d313c44e698"
 dependencies = [
  "same-file",
- "winapi",
  "winapi-util",
 ]
 
@@ -6107,6 +6205,19 @@ name = "wasm-bindgen-shared"
 version = "0.2.84"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0046fef7e28c3804e5e38bfa31ea2a0f73905319b677e57ebe37e49358989b5d"
+
+[[package]]
+name = "wasm-streams"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bbae3363c08332cadccd13b67db371814cd214c2524020932f0804b8cf7c078"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
 
 [[package]]
 name = "wasm-timer"
@@ -6477,6 +6588,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url 2.3.1",
+ "webb-proposals",
 ]
 
 [[package]]
@@ -6485,9 +6597,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
+ "chrono",
  "egg-mode",
  "futures",
- "rocket",
  "serde",
  "serde_derive",
  "serde_json",
@@ -6495,6 +6607,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "webb-auth",
+ "webb-proposals",
 ]
 
 [[package]]
@@ -6502,6 +6615,7 @@ name = "webb-faucet"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "hyper 0.10.16",
  "hyper-sync-rustls",
  "rocket",
@@ -6510,6 +6624,7 @@ dependencies = [
  "serde_json",
  "sled",
  "thiserror",
+ "twitter-v2",
  "webb",
  "webb-auth",
  "webb-auth-sled",
@@ -6519,7 +6634,7 @@ dependencies = [
 [[package]]
 name = "webb-proposals"
 version = "0.5.20"
-source = "git+https://github.com/webb-tools/webb-rs.git#2bbe7b6a4f92e18de39572b3b1f2a8e3e6ee57f4"
+source = "git+https://github.com/webb-tools/webb-rs.git#2e17c190c3b480ed3bfd1f2a391ebf325733dce4"
 dependencies = [
  "frame-support",
  "hex",

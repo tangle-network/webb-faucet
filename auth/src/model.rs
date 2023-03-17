@@ -169,6 +169,13 @@ impl UserInfo {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ClaimsData {
+    pub identity: u64,
+    pub address: String,
+    pub last_claimed_date: DateTime<Utc>,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Invalid Access")]

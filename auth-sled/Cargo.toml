@@ -9,9 +9,9 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 bincode = "1.3.3"
+chrono = { version = "0.4", features = ["serde"] }
 egg-mode = "0.16"
 futures = "0.3"
-rocket = { version = "0.5.0-rc.2", features = ["secrets"] }
 sled = "0.34.7"
 webb-auth = { path = "../auth" }
 serde = "1.0"
@@ -19,3 +19,4 @@ serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 thiserror = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+webb-proposals = { git = "https://github.com/webb-tools/webb-rs.git" }

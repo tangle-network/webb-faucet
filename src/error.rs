@@ -16,8 +16,12 @@ pub enum Error {
     Oauth2(#[from] rocket_oauth2::Error),
     #[error("Authorization error")]
     Authorization(#[from] webb_auth::Error<webb_auth_sled::Error>),
+    #[error("Twitter error")]
+    TwitterError(#[from] twitter_v2::error::Error),
     #[error("Invalid inclusion file line")]
     InvalidInclusionFileLine(String),
+    #[error("Custom error")]
+    Custom(String),
 }
 
 impl<'r, 'o: 'r> Responder<'r, 'o> for Error {

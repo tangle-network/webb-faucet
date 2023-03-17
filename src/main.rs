@@ -2,8 +2,9 @@
 extern crate rocket;
 
 use rocket::{
-    fairing::{AdHoc, Fairing},
-    Build, Rocket,
+    fairing::{AdHoc, Fairing, Info, Kind},
+    http::Header,
+    Build, Request, Response, Rocket,
 };
 use rocket::{launch, routes};
 use rocket_oauth2::{OAuth2, OAuthConfig};
@@ -16,12 +17,34 @@ use webb_auth_sled::SledAuthDb;
 
 pub mod auth;
 pub mod error;
+pub mod faucet;
 
 type SledAuthorizer = Authorizer<SledAuthDb>;
-pub struct Auth(sled::Db);
 
 fn provider_fairing<P: IsProvider>() -> impl Fairing {
     OAuth2::<P>::fairing(P::provider().name())
+}
+
+pub struct CORS;
+
+#[rocket::async_trait]
+impl Fairing for CORS {
+    fn info(&self) -> Info {
+        Info {
+            name: "Add CORS headers to responses",
+            kind: Kind::Response,
+        }
+    }
+
+    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
+        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+        response.set_header(Header::new(
+            "Access-Control-Allow-Methods",
+            "POST, GET, PATCH, OPTIONS",
+        ));
+        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+    }
 }
 
 #[derive(Deserialize)]
@@ -68,7 +91,6 @@ fn rocket() -> _ {
                 }
             },
         ))
-        .attach(provider_fairing::<Twitter>())
         .mount(
             "/",
             routes![
@@ -76,6 +98,9 @@ fn rocket() -> _ {
                 auth::login::logout,
                 auth::login::twitter,
                 auth::callback::twitter,
+                faucet::faucet,
             ],
         )
+        .attach(provider_fairing::<Twitter>())
+        .attach(CORS)
 }

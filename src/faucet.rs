@@ -2,7 +2,7 @@ use chrono::{Days, Utc};
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::json;
-use twitter_v2::{authorization::BearerToken, TwitterApi, id::NumericId, query::UserField};
+use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 use webb_proposals::TypedChainId;
@@ -33,6 +33,7 @@ pub async fn faucet(
     payload: Json<Payload>,
     mut connection: &State<sled::Db>,
 ) -> Result<status::Accepted<String>, Error> {
+    println!("Faucet request: {:?}", payload.clone().into_inner());
     let faucet_data = payload.clone().into_inner().faucet.clone();
     let oauth2_data = payload.into_inner().oauth.clone();
     let auth = BearerToken::new(oauth2_data.access_token);
@@ -44,13 +45,16 @@ pub async fn faucet(
     } = faucet_data;
 
     let typed_chain_id = TypedChainId::from(typed_chain_id.parse::<u64>().unwrap_or_default());
-
+    println!(
+        "Requesting faucet for (address {:?}, chain: {:?}",
+        address, typed_chain_id
+    );
     let maybe_user: Option<twitter_v2::data::User> = twitter_api
         .get_users_me()
         .send()
         .await
         .map_err(|e| {
-            println!("error: {:?}", e);
+            println!("Maybe user error: {:?}", e);
             Error::TwitterError(e)
         })
         .map(|res| match res.data.clone() {
@@ -58,6 +62,7 @@ pub async fn faucet(
             None => None,
         })?;
 
+    println!("Maybe user: {:#?}", maybe_user);
     // Throw an error if the user is not found
     let user = if maybe_user.is_none() {
         return Err(Error::TwitterError(twitter_v2::error::Error::Custom(
@@ -70,26 +75,82 @@ pub async fn faucet(
     // Check if the user is following the webb twitter account
     // - the account username is `webbprotocol`
     // - the user id is `1355009685859033092`
-    let my_followers = twitter_api.with_user_ctx().await?
+    let my_followers = twitter_api
+        .with_user_ctx()
+        .await?
         .get_my_following()
         .user_fields([UserField::Id])
         .max_results(100)
         .send()
         .await;
 
-    println!("{:?}", my_followers);
-
-    let is_following_webb = match my_followers {
+    // Check if the user is following the webb twitter account and return
+    // an error if they are not. If successful, return a bool and a pagination token.
+    // The pagination token is used to get the next page of followers.
+    let (mut is_following_webb, mut maybe_pagination_token) = match my_followers {
         Ok(followers) => {
             let webb_user_id = NumericId::new(1355009685859033092);
-            followers.data.clone().map(|u| {
-                u.iter().any(|follower| follower.id == webb_user_id)
-            }).unwrap_or(false)
-        },
-        Err(e) => {
-            false
+            (
+                followers
+                    .data
+                    .clone()
+                    .map(|u| u.iter().any(|follower| follower.id == webb_user_id))
+                    .unwrap_or(false),
+                followers.meta.clone().map(|m| m.next_token),
+            )
         }
+        Err(e) => (false, None),
     };
+
+    // If the user is not following the webb twitter account, check if there is a
+    // pagination token. If there is, get the next page of followers and check if
+    // the user is following the webb twitter account. If there is no pagination
+    // token, it means there are no more pages. Loop until we exhaust all pages.
+    if !is_following_webb {
+        while maybe_pagination_token.is_some()
+            && maybe_pagination_token.clone().unwrap().is_some()
+        {
+            let my_followers = twitter_api
+                .with_user_ctx()
+                .await?
+                .get_my_following()
+                .user_fields([UserField::Id])
+                .max_results(100)
+                .pagination_token(maybe_pagination_token.unwrap().unwrap().as_ref())
+                .send()
+                .await;
+
+            let (maybe_following, new_pagination_token) = match my_followers {
+                Ok(followers) => {
+                    println!(
+                        "Follower count: {:?}",
+                        followers.data.clone().map(|u| u.len())
+                    );
+                    println!(
+                        "Pagination token: {:?}",
+                        followers.meta.clone().map(|m| m.next_token)
+                    );
+                    let webb_user_id = NumericId::new(1355009685859033092);
+                    (
+                        followers
+                            .data
+                            .clone()
+                            .map(|u| u.iter().any(|follower| follower.id == webb_user_id))
+                            .unwrap_or(false),
+                        followers.meta.clone().map(|m| m.next_token),
+                    )
+                }
+                Err(_) => (false, None),
+            };
+
+            maybe_pagination_token = new_pagination_token;
+            is_following_webb = is_following_webb || maybe_following;
+        }
+
+        if !is_following_webb {
+            return Err(Error::Custom("User is not following webb".to_string()));
+        }
+    }
 
     println!(
         "{:?}  User {:?} is following webb: {:?}",
@@ -106,7 +167,7 @@ pub async fn faucet(
     )
     .await
     .map_err(|e| {
-        println!("error: {:?}", e);
+        println!("Last claim date error: {:?}", e);
         Error::Custom(format!("Error: {:?}", e.to_string()))
     })?;
 
@@ -137,7 +198,7 @@ pub async fn faucet(
     <SledAuthDb as AuthDb>::put_last_claim_date(connection, user.id.into(), typed_chain_id, claim)
         .await
         .map_err(|e| {
-            println!("error: {:?}", e);
+            println!("Put last claim date error: {:?}", e);
             Error::Custom(format!("Error: {:?}", e.to_string()))
         })?;
 
@@ -153,12 +214,15 @@ pub async fn faucet(
         address,
         typed_chain_id
     );
+    // TODO: Handle tx and return the hash
+    let tx_hash = "0x1234";
     return Ok(status::Accepted(Some(
         json!({
             "address": address,
             "typed_chain_id": typed_chain_id,
             "last_claimed_date": now,
             "user": user,
+            "tx_hash": tx_hash
         })
         .to_string(),
     )));

@@ -1,7 +1,8 @@
 use rocket::{
     http::Status,
     request::Request,
-    response::{Responder, Result}, serde::json::Json,
+    response::{Responder, Result},
+    serde::json::Json,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -28,25 +29,31 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
             Error::Oauth2(e) => Json(ErrorResponse {
                 status: "oauth2 error",
                 message: e.to_string(),
-            }).respond_to(req),
+            })
+            .respond_to(req),
             Error::Authorization(_) => Status::InternalServerError.respond_to(req),
             Error::TwitterError(e) => match e {
                 twitter_v2::Error::Url(e) => Json(ErrorResponse {
                     status: "url error",
                     message: e.to_string(),
-                }).respond_to(req),
-                twitter_v2::Error::InvalidAuthorizationHeader(_) => Status::Unauthorized.respond_to(req),
+                })
+                .respond_to(req),
+                twitter_v2::Error::InvalidAuthorizationHeader(_) => {
+                    Status::Unauthorized.respond_to(req)
+                }
                 twitter_v2::Error::NoRefreshToken => Status::NotFound.respond_to(req),
-                twitter_v2::Error::Custom(e) =>  Json(ErrorResponse {
+                twitter_v2::Error::Custom(e) => Json(ErrorResponse {
                     status: "custom error",
                     message: e.to_string(),
-                }).respond_to(req),
+                })
+                .respond_to(req),
                 _ => Status::InternalServerError.respond_to(req),
             },
             Error::Custom(_) => Json(ErrorResponse {
                 status: "custom error",
                 message: self.to_string(),
-            }).respond_to(req),
+            })
+            .respond_to(req),
         }
     }
 }

@@ -36,9 +36,7 @@ pub struct AppConfig {
 async fn init_authorization(rocket: &Rocket<Build>) -> Option<SledAuthorizer> {
     let _twitter_config = OAuthConfig::from_figment(rocket.figment(), "twitter").ok()?;
 
-    Authorizer::open()
-        .await
-        .ok()
+    Authorizer::open().await.ok()
 }
 
 fn init_db(rocket: &Rocket<Build>) -> Option<sled::Db> {

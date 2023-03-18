@@ -12,8 +12,7 @@ pub struct Authorizer<A: AuthDb> {
 }
 
 impl<A: AuthDb> Authorizer<A> {
-    pub async fn open(
-    ) -> Result<Self, Error<A::Error>> {
+    pub async fn open() -> Result<Self, Error<A::Error>> {
         Ok(Self {
             _auth_db: PhantomData,
         })

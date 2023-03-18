@@ -7,7 +7,7 @@
   </a>
   </div>
 
-# Webb Relayer 
+# Webb Faucet 
 
 <!-- TABLE OF CONTENTS -->
 <h2 id="table-of-contents" style=border:0!important> 📖 Table of Contents</h2>

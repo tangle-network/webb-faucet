@@ -1,13 +1,13 @@
 [default]
 db = "faucet"
-twitter_key = "$TWITTER_KEY"
-authorization = "./authorizations.txt"
-default_login_redirect_uri = "https://faucet.webb.tools"
-twitter_key_secret = "$TWITTER_KEY_SECRET"
-twitter_bearer_token = "$TWITTER_BEARER_TOKEN"
+default_login_redirect_uri = "https://127.0.0.1:3030/"
 
 [global.oauth.twitter]
 provider = "twitter"
-client_id = "$TWITTER_CLIENT_ID"
-client_secret = "$TWITTER_CLIENT_SECRET"
-redirect_uri = "http://localhost:8000/auth/twitter"
+client_id = "<client_id>"
+client_secret = "<client_secret>"
+redirect_uri = "https://127.0.0.1:3000/"
+
+[global.tls]
+certs = "<path/tls/cert.pem>"
+key = "<path/tls/key.pem>"

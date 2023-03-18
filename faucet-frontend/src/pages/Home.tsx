@@ -64,7 +64,6 @@ const Home: React.FC = () => {
 
   return (
     <div style={{ margin: '32px', padding: '32px' }}>
-      <h1>Log in with Twitter</h1>
       <TwitterAuth onLogin={onLogin} />
       {code && state ? (
         <div style={{ marginTop: '32px' }}>
@@ -87,7 +86,6 @@ const Home: React.FC = () => {
         </div>
       ) : null}
       <ClaimFundsForm
-        twitterId={''}
         accessToken={accessToken || ''}
       />
     </div>

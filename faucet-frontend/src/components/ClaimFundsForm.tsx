@@ -3,11 +3,10 @@ import React, { useState } from 'react';
 import './ClaimFundsForm.css';
 
 interface ClaimFundsFormProps {
-  twitterId: string;
   accessToken: string;
 }
 
-const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ twitterId, accessToken }) => {
+const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({accessToken }) => {
   const [chain, setChain] = useState<number>(0);
   const [address, setAddress] = useState<string>('');
 
@@ -19,8 +18,7 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ twitterId, accessToken 
         JSON.stringify({
           faucet: {
             address: address,
-            typed_chain_id: chain,
-            twitter_id: twitterId,
+            typed_chain_id: String(chain),
           },
           oauth: {
             access_token: accessToken,

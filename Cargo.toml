@@ -17,7 +17,6 @@ anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 hyper = "0.10"
 hyper-sync-rustls = { version = ">=0.3.0-rc.4, <0.3.0-rc.18" }
-twitter-v2 = "0.1.8"
 rocket = { version = "0.5.0-rc.2", features = ["secrets", "json", "tls"] }
 # rocket_oauth2 = { git = "https://github.com/webb-tools/rocket_oauth2", branch = "next", features = ["hyper_rustls_adapter"] }
 rocket_oauth2 = { path = "../rocket_oauth2", features = ["hyper_rustls_adapter"] }
@@ -25,9 +24,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sled = "0.34.7"
 thiserror = "1.0"
+twitter-v2 = "0.1.8"
 
 webb-auth-sled = { path = "./auth-sled" }
 webb-auth ={ path = "./auth" }
 
 webb = "0.5.17"
 webb-proposals = { git = "https://github.com/webb-tools/webb-rs.git" }
+rocket_cors = { git = "https://github.com/lawliet89/rocket_cors", branch = "master" }

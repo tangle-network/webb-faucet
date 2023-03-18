@@ -3,10 +3,11 @@ extern crate rocket;
 
 use rocket::{
     fairing::{AdHoc, Fairing, Info, Kind},
-    http::Header,
+    http::{Header, Method},
     Build, Request, Response, Rocket,
 };
 use rocket::{launch, routes};
+use rocket_cors::{AllowedOrigins, CorsOptions};
 use rocket_oauth2::{OAuth2, OAuthConfig};
 use serde::Deserialize;
 use webb_auth::{
@@ -25,28 +26,6 @@ fn provider_fairing<P: IsProvider>() -> impl Fairing {
     OAuth2::<P>::fairing(P::provider().name())
 }
 
-pub struct CORS;
-
-#[rocket::async_trait]
-impl Fairing for CORS {
-    fn info(&self) -> Info {
-        Info {
-            name: "Add CORS headers to responses",
-            kind: Kind::Response,
-        }
-    }
-
-    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
-        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
-        response.set_header(Header::new(
-            "Access-Control-Allow-Methods",
-            "POST, GET, PATCH, OPTIONS",
-        ));
-        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
-        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
-    }
-}
-
 #[derive(Deserialize)]
 pub struct AppConfig {
     db: String,
@@ -55,15 +34,11 @@ pub struct AppConfig {
 }
 
 async fn init_authorization(rocket: &Rocket<Build>) -> Option<SledAuthorizer> {
-    let twitter_config = OAuthConfig::from_figment(rocket.figment(), "twitter").ok()?;
+    let _twitter_config = OAuthConfig::from_figment(rocket.figment(), "twitter").ok()?;
 
-    Authorizer::open(
-        twitter_config.client_id(),
-        twitter_config.client_secret(),
-        twitter_config.redirect_uri()?,
-    )
-    .await
-    .ok()
+    Authorizer::open()
+        .await
+        .ok()
 }
 
 fn init_db(rocket: &Rocket<Build>) -> Option<sled::Db> {
@@ -74,6 +49,16 @@ fn init_db(rocket: &Rocket<Build>) -> Option<sled::Db> {
 
 #[launch]
 fn rocket() -> _ {
+    let cors = CorsOptions::default()
+        .allowed_origins(AllowedOrigins::all())
+        .allowed_methods(
+            vec![Method::Get, Method::Post, Method::Patch]
+                .into_iter()
+                .map(From::from)
+                .collect(),
+        )
+        .allow_credentials(true);
+
     rocket::build()
         .attach(AdHoc::config::<AppConfig>())
         .attach(AdHoc::try_on_ignite("Open database", |rocket| async {
@@ -92,7 +77,9 @@ fn rocket() -> _ {
             },
         ))
         .attach(provider_fairing::<Twitter>())
-        .attach(CORS)
+        .attach(cors.to_cors().unwrap())
+        .manage(cors.to_cors().unwrap())
+        .mount("/", rocket_cors::catch_all_options_routes())
         .mount(
             "/",
             routes![

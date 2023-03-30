@@ -5,9 +5,10 @@ use serde_json::json;
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
-use webb_proposals::TypedChainId;
 
 use crate::error::Error;
+
+const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -22,19 +23,19 @@ pub struct OAuth2Token {
 }
 
 // Define the FaucetRequest struct to represent the faucet request data
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct FaucetRequest {
-    address: String,
-    typed_chain_id: String,
+    address: webb::evm::ethers::types::Address,
+    typed_chain_id: webb_proposals::TypedChainId,
 }
 
 #[post("/faucet", data = "<payload>")]
 pub async fn faucet(
     payload: Json<Payload>,
-    mut connection: &State<sled::Db>,
+    connection: &State<sled::Db>,
 ) -> Result<status::Accepted<String>, Error> {
     println!("Faucet request: {:?}", payload.clone().into_inner());
-    let faucet_data = payload.clone().into_inner().faucet.clone();
+    let faucet_data = payload.clone().into_inner().faucet;
     let oauth2_data = payload.into_inner().oauth.clone();
     let auth = BearerToken::new(oauth2_data.access_token);
     let twitter_api = TwitterApi::new(auth);
@@ -43,8 +44,6 @@ pub async fn faucet(
         address,
         typed_chain_id,
     } = faucet_data;
-
-    let typed_chain_id = TypedChainId::from(typed_chain_id.parse::<u64>().unwrap_or_default());
     println!(
         "Requesting faucet for (address {:?}, chain: {:?}",
         address, typed_chain_id
@@ -86,7 +85,7 @@ pub async fn faucet(
     // The pagination token is used to get the next page of followers.
     let (mut is_following_webb, mut maybe_pagination_token) = match my_followers {
         Ok(followers) => {
-            let webb_user_id = NumericId::new(1355009685859033092);
+            let webb_user_id = NumericId::new(WEBB_TWITTER_ACCOUNT_ID);
             (
                 followers
                     .data
@@ -184,7 +183,7 @@ pub async fn faucet(
 
     let claim: ClaimsData = ClaimsData {
         identity: user.id.into(),
-        address: address.clone(),
+        address: address.to_fixed_bytes(),
         last_claimed_date: now,
     };
 

@@ -172,7 +172,7 @@ impl UserInfo {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClaimsData {
     pub identity: u64,
-    pub address: String,
+    pub address: [u8; 20],
     pub last_claimed_date: DateTime<Utc>,
 }
 

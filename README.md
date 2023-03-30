@@ -1,13 +1,14 @@
 <div align="center">
 <a href="https://www.webb.tools/">
 
-  ![Webb Logo](./assets/webb_banner_light.png#gh-light-mode-only)
+![Webb Logo](./assets/webb_banner_light.png#gh-light-mode-only)
 
-  ![Webb Logo](./assets/webb_banner_dark.png#gh-dark-mode-only)
-  </a>
+![Webb Logo](./assets/webb_banner_dark.png#gh-dark-mode-only)
+</a>
+
   </div>
 
-# Webb Faucet 
+# Webb Faucet
 
 <!-- TABLE OF CONTENTS -->
 <h2 id="table-of-contents" style=border:0!important> 📖 Table of Contents</h2>
@@ -47,16 +48,18 @@ rustup update
 
 Great! Now your Rust environment is ready! 🚀🚀
 
-If you want to run this over `https` you'll need to generate a self-signed certificate. You can do this with the following command:
-
-```bash
-openssl req  -nodes -new -x509  -keyout key.pem -out cert.pem
-```
-
 ## Usage
-Starting the Rust serve requires you to create a `Rocket.toml` file specified with your Twitter Developer App's credentials. You can find the template in the `Rocket.example.toml` file.
+
+Starting the Rust serve requires you to create a `Rocket.toml` file specified with your Twitter Developer App's credentials. You can find the template in the `Rocket.example.toml` file. You will also need to create a new Twitter Application for development purposes. You can find the instructions [here](https://developer.twitter.com/en/docs/twitter-api/getting-started/getting-access-to-the-twitter-api).
+
+**Notes:**
+
+1. For 'App permissions' you will need to select 'Read' permissions.
+2. For 'Type of App' you will need to select 'Native App'.
+3. For 'App info' you will need to fill in the 'Website URL' and 'Callback URLs' fields. The 'Callback URLs' field should be set to `http://127.0.0.1:3000` and `http://localhost:3000`.
 
 Once created, you can run the server with the following command:
+
 ```rust
 cargo run
 ```
@@ -71,6 +74,7 @@ yarn start
 ```
 
 ## User Flow
+
 1. User clicks the "Log in with Twitter" button
 2. User is redirected and authorizes the app to access their Twitter account.
 3. Once the access token is generated and displayed, the user should supply the receiving addressand claim their tokens by clicking the "Claim" button.

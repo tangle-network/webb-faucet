@@ -1,13 +1,9 @@
 [default]
 db = "faucet"
-default_login_redirect_uri = "https://127.0.0.1:3030/"
+default_login_redirect_uri = "http://localhost:3000/"
 
 [global.oauth.twitter]
 provider = "twitter"
 client_id = "<client_id>"
 client_secret = "<client_secret>"
-redirect_uri = "https://127.0.0.1:3000/"
-
-[global.tls]
-certs = "<path/tls/cert.pem>"
-key = "<path/tls/key.pem>"
+redirect_uri = "http://localhost:3000"

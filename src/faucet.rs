@@ -57,10 +57,7 @@ pub async fn faucet(
             println!("Maybe user error: {:?}", e);
             Error::TwitterError(e)
         })
-        .map(|res| match res.data.clone() {
-            Some(data) => Some(data),
-            None => None,
-        })?;
+        .map(|res| res.data.clone())?;
 
     println!("Maybe user: {:#?}", maybe_user);
     // Throw an error if the user is not found
@@ -107,8 +104,7 @@ pub async fn faucet(
     // the user is following the webb twitter account. If there is no pagination
     // token, it means there are no more pages. Loop until we exhaust all pages.
     if !is_following_webb {
-        while maybe_pagination_token.is_some()
-            && maybe_pagination_token.clone().unwrap().is_some()
+        while maybe_pagination_token.is_some() && maybe_pagination_token.clone().unwrap().is_some()
         {
             let my_followers = twitter_api
                 .with_user_ctx()
@@ -160,16 +156,13 @@ pub async fn faucet(
     );
 
     // Check if the user's last claim date is within the last 24 hours
-    let last_claim_date = <SledAuthDb as AuthDb>::get_last_claim_date(
-        &mut connection,
-        user.id.into(),
-        typed_chain_id.clone(),
-    )
-    .await
-    .map_err(|e| {
-        println!("Last claim date error: {:?}", e);
-        Error::Custom(format!("Error: {:?}", e.to_string()))
-    })?;
+    let last_claim_date =
+        <SledAuthDb as AuthDb>::get_last_claim_date(connection, user.id.into(), typed_chain_id)
+            .await
+            .map_err(|e| {
+                println!("Last claim date error: {:?}", e);
+                Error::Custom(format!("Error: {:?}", e.to_string()))
+            })?;
 
     let now = Utc::now();
     // check if the rust env is test, if so, skip the 24 hour check
@@ -182,9 +175,9 @@ pub async fn faucet(
                     Utc::now().to_rfc3339(),
                     user
                 );
-                return Err(Error::Custom(format!(
-                    "You can only claim once every 24 hours.",
-                )));
+                return Err(Error::Custom(
+                    "You can only claim once every 24 hours.".to_string(),
+                ));
             }
         }
     }
@@ -216,7 +209,7 @@ pub async fn faucet(
     );
     // TODO: Handle tx and return the hash
     let tx_hash = "0x1234";
-    return Ok(status::Accepted(Some(
+    Ok(status::Accepted(Some(
         json!({
             "address": address,
             "typed_chain_id": typed_chain_id,
@@ -225,5 +218,5 @@ pub async fn faucet(
             "tx_hash": tx_hash
         })
         .to_string(),
-    )));
+    )))
 }

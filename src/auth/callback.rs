@@ -1,18 +1,14 @@
 use crate::error::Error;
 
-use super::{
-    super::{AppConfig, SledAuthorizer},
-    get_token_cookie_name,
-};
+use super::super::AppConfig;
 use rocket::{
     http::{Cookie, CookieJar, SameSite},
     response::Redirect,
     State,
 };
 use twitter_v2::authorization::BearerToken;
-use twitter_v2::query::UserField;
 use twitter_v2::TwitterApi;
-use webb_auth::{model::Provider, AuthDb};
+use webb_auth::AuthDb;
 use webb_auth_sled::SledAuthDb;
 
 fn make_cookie(name: &'static str, value: String, domain: &Option<String>) -> Cookie<'static> {

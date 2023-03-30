@@ -44,7 +44,7 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
                 twitter_v2::Error::NoRefreshToken => Status::NotFound.respond_to(req),
                 twitter_v2::Error::Custom(e) => Json(ErrorResponse {
                     status: "custom error",
-                    message: e.to_string(),
+                    message: e,
                 })
                 .respond_to(req),
                 _ => Status::InternalServerError.respond_to(req),

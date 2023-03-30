@@ -1,33 +1,36 @@
-import React, { useEffect } from 'react';
-import queryString from 'query-string';
-import TwitterAuth from '../components/TwitterAuth';
-import axios from 'axios';
-import ClaimFundsForm from '../components/ClaimFundsForm';
+import React, { useEffect } from "react";
+import queryString from "query-string";
+import TwitterAuth from "../components/TwitterAuth";
+import axios from "axios";
+import ClaimFundsForm from "../components/ClaimFundsForm";
 
-const postData = async (
-  code: string,
-) => {
-  const client_id = process.env.REACT_APP_TWITTER_CLIENT_ID || '';
-  const response = await axios.post('https://proxy.cors.sh/https://api.twitter.com/2/oauth2/token', {
-    code,
-    grant_type: 'authorization_code',
-    client_id: client_id,
-    redirect_uri: 'https://127.0.0.1:3000/',
-    code_verifier: 'challenge',
-  }, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Access-Control-Allow-Origin': '*',
-      'x-cors-api-key': process.env.REACT_APP_CORS_PROXY_SH_API_KEY || '',
+const postData = async (code: string) => {
+  const client_id = process.env.REACT_APP_TWITTER_CLIENT_ID || "";
+  const response = await axios.post(
+    // This will be proxied to https:
+    // "https://api.twitter.com/2/oauth2/token"
+    "/2/oauth2/token",
+    {
+      code,
+      grant_type: "authorization_code",
+      client_id: client_id,
+      redirect_uri: process.env.PUBLIC_URL,
+      code_verifier: "challenge",
     },
-  });
+    {
+      baseURL: process.env.PUBLIC_URL,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      }
+    }
+  );
   return response.data;
 };
 
-const authenticate = async (
-  accessToken: string,
-) => {
-  const response = await axios.get(`https://127.0.0.1:3030/auth/twitter/?access_token=${accessToken}`);
+const authenticate = async (accessToken: string) => {
+  const response = await axios.get(`/auth/twitter/?access_token=${accessToken}`, {
+    baseURL: process.env.REACT_APP_BACKEND_URL || "http://localhost:8000",
+  });
   console.log(response);
   return response.data;
 };
@@ -40,9 +43,9 @@ const Home: React.FC = () => {
   const code = query.code;
   const state = query.state;
 
-
   const onLogin = async () => {
-    window.location.assign('https://127.0.0.1:3030/login/twitter');
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+    window.location.assign(`${backendUrl}/login/twitter`);
   };
 
   useEffect(() => {
@@ -52,9 +55,7 @@ const Home: React.FC = () => {
         setAccessToken(data.access_token);
         setRefreshToken(data.refresh_token);
         setScope(data.scope);
-        const authenticateResponse = await authenticate(
-          data.access_token,
-        )
+        const authenticateResponse = await authenticate(data.access_token);
         console.log(authenticateResponse);
       }
     }
@@ -63,10 +64,10 @@ const Home: React.FC = () => {
   }, [code, state]);
 
   return (
-    <div style={{ margin: '32px', padding: '32px' }}>
+    <div style={{ margin: "32px", padding: "32px" }}>
       <TwitterAuth onLogin={onLogin} />
       {code && state ? (
-        <div style={{ marginTop: '32px' }}>
+        <div style={{ marginTop: "32px" }}>
           <p>
             <strong>Code:</strong> {code}
           </p>
@@ -76,7 +77,7 @@ const Home: React.FC = () => {
         </div>
       ) : null}
       {accessToken && refreshToken ? (
-        <div style={{ marginTop: '32px' }}>
+        <div style={{ marginTop: "32px" }}>
           <p>
             <strong>Access Token:</strong> {accessToken}
           </p>
@@ -85,9 +86,7 @@ const Home: React.FC = () => {
           </p>
         </div>
       ) : null}
-      <ClaimFundsForm
-        accessToken={accessToken || ''}
-      />
+      <ClaimFundsForm accessToken={accessToken || ""} />
     </div>
   );
 };

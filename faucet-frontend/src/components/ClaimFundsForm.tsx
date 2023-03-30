@@ -14,7 +14,8 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({accessToken }) => {
     // Implement your claim funds logic here
     let result;
     try {
-      result = await axios.post('https://127.0.0.1:3030/faucet',
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+      result = await axios.post('/faucet',
         JSON.stringify({
           faucet: {
             address: address,
@@ -28,8 +29,8 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({accessToken }) => {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Access-Control-Allow-Origin': '*',
             'Authorization': 'Bearer ' + accessToken,
-            'x-cors-api-key': process.env.REACT_APP_CORS_PROXY_SH_API_KEY || '',
-          }
+          },
+          baseURL: backendUrl,
         }
       );
     } catch (error) {

@@ -1,32 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 .twitter-auth-button {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background-color: #1da1f2;
-  color: white;
+  background: var(--color-bg-secondary);
   border: none;
-  border-radius: 25px;
-  font-size: 14px;
-  font-weight: bold;
-  padding: 8px 16px;
-  cursor: pointer;
-  text-decoration: none;
-  outline: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: background-color 0.2s, box-shadow 0.2s;
-}
-
-.twitter-auth-button:hover {
-  background-color: #0c84d2;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  color: var(--color-link);
 }
 
 .twitter-logo {
   width: 24px;
   height: 24px;
   margin-right: 8px;
+}
+
+.twitter-auth {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }

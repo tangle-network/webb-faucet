@@ -1,170 +1,80 @@
-use std::fmt::Display;
-use std::str::FromStr;
-
 use chrono::{DateTime, Utc};
 
-pub mod providers {
-    use super::{IsProvider, Provider};
+#[derive(
+    Copy, Clone, Debug, Eq, Hash, PartialEq, Default, serde::Serialize, serde::Deserialize,
+)]
+#[serde(tag = "type", content = "value")]
+pub enum UniversalWalletAddress {
+    #[default]
+    Unknown,
+    Ethereum([u8; 20]),
+    Substrate([u8; 32]),
+}
 
-    pub struct Twitter;
-
-    impl IsProvider for Twitter {
-        type Id = u64;
-
-        fn provider() -> Provider {
-            Provider::Twitter
-        }
+impl From<[u8; 32]> for UniversalWalletAddress {
+    fn from(v: [u8; 32]) -> Self {
+        Self::Substrate(v)
     }
 }
 
-pub trait IsProvider: 'static {
-    type Id;
-
-    fn provider() -> Provider;
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Provider {
-    Twitter,
-}
-
-impl Provider {
-    pub const fn prefix(&self) -> &'static str {
-        match self {
-            Self::Twitter => "tw",
-        }
-    }
-
-    pub const fn name(&self) -> &'static str {
-        match self {
-            Self::Twitter => "twitter",
-        }
+impl From<[u8; 20]> for UniversalWalletAddress {
+    fn from(v: [u8; 20]) -> Self {
+        Self::Ethereum(v)
     }
 }
 
-impl Display for Provider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
-impl FromStr for Provider {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_ref() {
-            "twitter" => Ok(Self::Twitter),
-            other => Err(Error::InvalidProvider(other.to_string())),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum Access {
-    Admin,
-    Trusted,
-    Untrusted,
-}
-
-impl Access {
-    pub const fn name(&self) -> &'static str {
-        match self {
-            Self::Admin => "admin",
-            Self::Trusted => "trusted",
-            Self::Untrusted => "untrusted",
-        }
+impl UniversalWalletAddress {
+    /// Returns `true` if the universal wallet address is [`Unknown`].
+    ///
+    /// [`Unknown`]: UniversalWalletAddress::Unknown
+    #[must_use]
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
     }
 
-    pub fn from_label(s: &str) -> Result<Access, Error> {
-        match s {
-            "admin" => Ok(Access::Admin),
-            "trusted" => Ok(Access::Trusted.into()),
-            other => Err(Error::InvalidAccess(other.to_string())),
-        }
-    }
-}
-
-impl Display for Access {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Authorization {
-    pub identity: u64,
-    pub access: Access,
-    pub has_claimed_date: Option<DateTime<Utc>>,
-}
-
-impl Authorization {
-    pub fn new(identity: u64, access: Access) -> Self {
-        Self {
-            identity,
-            access: access.into(),
-            has_claimed_date: None,
-        }
+    /// Returns `true` if the universal wallet address is [`Ethereum`].
+    ///
+    /// [`Ethereum`]: UniversalWalletAddress::Ethereum
+    #[must_use]
+    pub fn is_ethereum(&self) -> bool {
+        matches!(self, Self::Ethereum(..))
     }
 
-    pub fn update_claimed_date(&mut self, date: DateTime<Utc>) {
-        self.has_claimed_date = Some(date);
-    }
-
-    pub fn is_claim_older_than_one_day(&self) -> bool {
-        match self.has_claimed_date {
-            Some(date) => date < Utc::now() - chrono::Duration::days(1),
-            None => true,
-        }
-    }
-
-    pub fn provider(&self) -> Provider {
-        Provider::Twitter
-    }
-
-    pub fn is_admin(&self) -> bool {
-        match self.access {
-            Access::Admin => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_trusted(&self) -> bool {
-        match self.access {
-            Access::Admin | Access::Trusted => true,
-            _ => false,
-        }
-    }
-
-    pub fn date_updated(&self) -> Option<DateTime<Utc>> {
-        self.has_claimed_date
+    /// Returns `true` if the universal wallet address is [`Substrate`].
+    ///
+    /// [`Substrate`]: UniversalWalletAddress::Substrate
+    #[must_use]
+    pub fn is_substrate(&self) -> bool {
+        matches!(self, Self::Substrate(..))
     }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", content = "value")]
 pub enum UserInfo {
     Twitter {
         id: u64,
-        screen_name: String,
-        address: Vec<u8>,
+        handle: String,
+        address: UniversalWalletAddress,
     },
 }
 
 impl UserInfo {
-    pub fn id_str(&self) -> String {
+    pub fn id(&self) -> u64 {
         match self {
-            Self::Twitter { id, .. } => id.to_string(),
+            Self::Twitter { id, .. } => *id,
         }
     }
 
     pub fn name(&self) -> String {
         match self {
-            Self::Twitter { screen_name, .. } => screen_name.to_string(),
+            Self::Twitter { handle, .. } => handle.clone(),
         }
     }
 
-    pub fn address(&self) -> Vec<u8> {
+    pub fn address(&self) -> UniversalWalletAddress {
         match self {
-            Self::Twitter { address, .. } => address.clone(),
+            Self::Twitter { address, .. } => *address,
         }
     }
 }
@@ -172,14 +82,14 @@ impl UserInfo {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClaimsData {
     pub identity: u64,
-    pub address: [u8; 20],
+    pub address: UniversalWalletAddress,
     pub last_claimed_date: DateTime<Utc>,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Invalid Access")]
+    #[error("Invalid Access: {0}")]
     InvalidAccess(String),
-    #[error("Invalid provider")]
+    #[error("Invalid provider: {0}")]
     InvalidProvider(String),
 }

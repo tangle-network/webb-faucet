@@ -8,17 +8,6 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-egg-mode = "0.16"
-flagset = "0.4"
-futures = "0.3"
-futures-locks = "0.7"
-openid = "0.11"
-parking_lot = "0.12"
-reqwest = { version = "0.11", features = ["json"] }
 serde = "1.0"
-serde_derive = "1.0"
-serde_json = { version = "1.0", features = ["preserve_order"] }
 thiserror = "1.0"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-url = "2"
 webb-proposals = { git = "https://github.com/webb-tools/webb-rs.git" }

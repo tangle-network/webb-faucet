@@ -1,35 +1,59 @@
-use super::{error::Error, SledAuthorizer};
-use rocket::{http::CookieJar, State};
-use webb_auth::model::Provider;
+use rocket::http::Status;
+use rocket::request::{FromRequest, Outcome};
 
-pub mod callback;
 pub mod login;
 
-const TOKEN_COOKIE_NAMES: [&str; 1] = [get_token_cookie_name(Provider::Twitter)];
+/// Contains the OAuth2 provider implementations.
+pub mod providers {
 
-const fn get_token_cookie_name(provider: Provider) -> &'static str {
-    match provider {
-        Provider::Twitter => "twitter_token",
+    pub trait Provider {
+        const NAME: &'static str;
+        fn name() -> &'static str {
+            Self::NAME
+        }
+    }
+    /// Twitter OAuth2 provider.
+    #[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct Twitter;
+
+    impl Provider for Twitter {
+        const NAME: &'static str = "twitter";
     }
 }
 
-pub fn get_token_cookie(cookies: &CookieJar<'_>, provider: Provider) -> Option<String> {
-    cookies
-        .get_private(get_token_cookie_name(provider))
-        .map(|cookie| cookie.value().to_string())
+/// Twitter-specific OAuth2 Authurization token.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TwitterBearerToken<'r>(&'r str);
+
+impl<'r> TwitterBearerToken<'r> {
+    pub fn token(&self) -> &'r str {
+        self.0
+    }
 }
 
-pub async fn lookup_is_trusted(
-    cookies: &CookieJar<'_>,
-    authorizer: &SledAuthorizer,
-    mut connection: State<sled::Db>,
-) -> Result<bool, Error> {
-    match get_token_cookie(cookies, Provider::Twitter) {
-        Some(token) => authorizer
-            .authorize_twitter(&mut connection, &token)
-            .await?
-            .map(|authorization| Ok(authorization.is_trusted()))
-            .unwrap_or(Ok(false)),
-        None => Ok(false),
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TwitterBearerTokenError {
+    Missing,
+    Malformed,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for TwitterBearerToken<'r> {
+    type Error = TwitterBearerTokenError;
+
+    async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, Self::Error> {
+        let maybe_token = match request.headers().get_one("Authorization") {
+            Some(token) => token.trim(),
+            None => {
+                return Outcome::Failure((Status::Unauthorized, TwitterBearerTokenError::Missing))
+            }
+        };
+        let token = match maybe_token.strip_prefix("Bearer ") {
+            Some(token) => token,
+            None => {
+                return Outcome::Failure((Status::Unauthorized, TwitterBearerTokenError::Malformed))
+            }
+        };
+        Outcome::Success(TwitterBearerToken(token))
     }
 }

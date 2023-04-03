@@ -1,6 +1,5 @@
 [default]
 db = "faucet"
-default_login_redirect_uri = "http://localhost:3000/"
 
 [global.oauth.twitter]
 provider = "twitter"

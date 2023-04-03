@@ -1,193 +1,90 @@
 use chrono::{DateTime, Utc};
-use egg_mode::{KeyPair, Token};
 use std::convert::TryFrom;
-use webb_auth::{
-    model::{Access, Authorization, ClaimsData},
-    AuthDb, UserInfo,
-};
+use webb_auth::{model::ClaimsData, AuthDb, UserInfo};
 use webb_proposals::TypedChainId;
 
 /// SledStore is a store that stores the history of events in  a [Sled](https://sled.rs)-based database.
 #[derive(Clone)]
-pub struct SledAuthDb;
+pub struct SledAuthDb {
+    db: sled::Db,
+}
 
-#[async_trait::async_trait]
-impl AuthDb for SledAuthDb {
-    type Connection = sled::Db;
-    type Error = Error;
-
-    async fn get_twitter_name(
-        connection: &Self::Connection,
-        id: u64,
-    ) -> Result<Option<UserInfo>, Self::Error> {
-        let id = u64_to_i64(id)?;
-        let user_tree = connection.open_tree("users").unwrap();
-        user_tree
-            .get(&id.to_be_bytes())
-            .map_err(Error::from)
-            .map(|value| {
-                value.map(|value| {
-                    let user_object: UserInfo = serde_json::from_slice(&value).unwrap();
-                    user_object
-                })
-            })
-    }
-
-    async fn put_twitter_name(
-        connection: &Self::Connection,
-        id: u64,
-        value: &str,
-    ) -> Result<(), Self::Error> {
-        let id = u64_to_i64(id)?;
-        let user_tree = connection.open_tree("users").unwrap();
-        let user = UserInfo::Twitter {
-            id: id.try_into().unwrap(),
-            screen_name: value.to_string(),
-            address: vec![],
-        };
-        let user_bytes = bincode::serialize(&user).unwrap();
-        user_tree
-            .insert(&id.to_be_bytes(), user_bytes)
-            .map_err(Error::from)?;
-        Ok(())
-    }
-
-    async fn put_twitter_name_with_address(
-        connection: &Self::Connection,
-        id: u64,
-        value: &str,
-        address: Vec<u8>,
-    ) -> Result<(), Self::Error> {
-        let id = u64_to_i64(id)?;
-        let user_tree = connection.open_tree("users").unwrap();
-        let user = UserInfo::Twitter {
-            id: id.try_into().unwrap(),
-            screen_name: value.to_string(),
-            address,
-        };
-        let user_bytes = bincode::serialize(&user).unwrap();
-        user_tree
-            .insert(&id.to_be_bytes(), user_bytes)
-            .map_err(Error::from)?;
-        Ok(())
-    }
-
-    async fn lookup_twitter_token(
-        connection: &Self::Connection,
-        token: &str,
-    ) -> Result<Option<u64>, Self::Error> {
-        let token_tree = connection.open_tree("access_tokens").unwrap();
-        token_tree.get(token).map_err(Error::from).map(|row| {
-            row.map(|row| {
-                let token: AccessToken = bincode::deserialize(&row).unwrap();
-                token.id
-            })
+impl SledAuthDb {
+    /// Open a new SledStore.
+    pub fn open<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Error> {
+        Ok(Self {
+            db: sled::Config::new()
+                .use_compression(false)
+                .path(path)
+                .open()?,
         })
     }
 
-    async fn get_twitter_access_token(
-        connection: &Self::Connection,
-        token: &str,
-    ) -> Result<Option<Token>, Self::Error> {
-        let access_token_tree = connection.open_tree("access_tokens").unwrap();
-        access_token_tree
-            .get(token)
-            .map_err(Error::from)
-            .map(|row| {
-                row.map(|row| {
-                    let token: AccessToken = bincode::deserialize(&row).unwrap();
-                    Token::Access {
-                        consumer: KeyPair::new(token.token.to_string(), token.consumer_secret),
-                        access: KeyPair::new(token.access_key, token.access_secret),
-                    }
-                })
-            })
+    /// Open a new SledStore in a temporary directory.
+    #[cfg(test)]
+    pub fn open_for_tests() -> Result<Self, Error> {
+        Ok(Self {
+            db: sled::Config::new().temporary(true).open()?,
+        })
     }
+}
 
-    async fn put_twitter_token(
-        connection: &Self::Connection,
-        token: &str,
-        id: u64,
-        consumer_secret: &str,
-        access_key: &str,
-        access_secret: &str,
-    ) -> Result<(), Self::Error> {
+#[async_trait::async_trait]
+impl AuthDb for SledAuthDb {
+    type Error = Error;
+
+    async fn put_user_info(&self, id: u64, value: &UserInfo) -> Result<(), Self::Error> {
         let id = u64_to_i64(id)?;
-        let access_token_tree = connection.open_tree("access_tokens").unwrap();
-        let access_token = AccessToken {
-            id: id.try_into().unwrap(),
-            token: token.to_string(),
-            consumer_secret: consumer_secret.to_string(),
-            access_key: access_key.to_string(),
-            access_secret: access_secret.to_string(),
-        };
-        let access_token_bytes = bincode::serialize(&access_token).unwrap();
-        access_token_tree
-            .insert(token, access_token_bytes)
-            .map_err(Error::from)?;
+        let user_info_tree = self.db.open_tree("users")?;
+        let user_info_bytes = serde_json::to_vec(value)?;
+        user_info_tree.insert(id.to_be_bytes(), user_info_bytes)?;
         Ok(())
     }
 
-    async fn save_authorization(
-        connection: &Self::Connection,
-        id: u64,
-    ) -> Result<Option<Authorization>, Self::Error> {
+    async fn get_user_info(&self, id: u64) -> Result<Option<UserInfo>, Self::Error> {
         let id = u64_to_i64(id)?;
-        let authorizations_tree = connection.open_tree("authorizations").unwrap();
-        let authorization = Authorization::new(id.try_into().unwrap(), Access::Trusted);
-        let authorization_bytes = bincode::serialize(&authorization).unwrap();
-        authorizations_tree
-            .insert(&id.to_be_bytes(), authorization_bytes)
-            .map_err(Error::from)?;
-        Ok(Some(authorization))
+        let user_info_tree = self.db.open_tree("users")?;
+        user_info_tree
+            .get(id.to_be_bytes())
+            .map_err(Into::into)
+            .and_then(|row| {
+                row.map(|row| serde_json::from_slice(&row).map_err(Into::into))
+                    .transpose()
+            })
     }
 
-    async fn put_last_claim_date(
-        connection: &Self::Connection,
+    async fn put_last_claim_data(
+        &self,
         id: u64,
         typed_chain_id: TypedChainId,
         claim: ClaimsData,
     ) -> Result<DateTime<Utc>, Self::Error> {
         let id = u64_to_i64(id)?;
-        let last_claim_tree = connection
-            .open_tree(format!("claims-{:?}", typed_chain_id.chain_id()))
-            .unwrap();
-        let claims_data_bytes = bincode::serialize(&claim).unwrap();
-        last_claim_tree
-            .insert(&id.to_be_bytes(), claims_data_bytes)
-            .map_err(Error::from)?;
+        let last_claim_tree = self
+            .db
+            .open_tree(format!("claims-{}", typed_chain_id.chain_id()))?;
+        let claims_data_bytes = serde_json::to_vec(&claim)?;
+        last_claim_tree.insert(id.to_be_bytes(), claims_data_bytes)?;
         Ok(claim.last_claimed_date)
     }
 
-    async fn get_last_claim_date(
-        connection: &Self::Connection,
+    async fn get_last_claim_data(
+        &self,
         id: u64,
         typed_chain_id: TypedChainId,
-    ) -> Result<Option<DateTime<Utc>>, Self::Error> {
+    ) -> Result<Option<ClaimsData>, Self::Error> {
         let id = u64_to_i64(id)?;
-        let last_claim_tree = connection
-            .open_tree(format!("claims-{:?}", typed_chain_id.chain_id()))
-            .unwrap();
-        let claims_date = last_claim_tree
-            .get(&id.to_be_bytes())
-            .map_err(Error::from)
-            .map(|row: Option<_>| {
-                row.map(|row| {
-                    let claim: ClaimsData = bincode::deserialize(&row).unwrap();
-                    claim.last_claimed_date
-                })
-            })?;
-        Ok(claims_date)
+        let last_claim_tree = self
+            .db
+            .open_tree(format!("claims-{}", typed_chain_id.chain_id()))?;
+        last_claim_tree
+            .get(id.to_be_bytes())
+            .map_err(Into::into)
+            .and_then(|row| {
+                row.map(|row| serde_json::from_slice(&row).map_err(Into::into))
+                    .transpose()
+            })
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct AccessToken {
-    token: String,
-    id: u64,
-    consumer_secret: String,
-    access_key: String,
-    access_secret: String,
 }
 
 fn u64_to_i64(value: u64) -> Result<i64, Error> {
@@ -196,8 +93,10 @@ fn u64_to_i64(value: u64) -> Result<i64, Error> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Sled error")]
+    #[error("Sled error: {0}")]
     Sled(#[from] sled::Error),
-    #[error("Invalid ID")]
+    #[error("Invalid ID: {0}")]
     InvalidId(u64),
+    #[error("Invalid Serialization: {0}")]
+    Serde(#[from] serde_json::Error),
 }

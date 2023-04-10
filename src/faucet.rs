@@ -105,12 +105,14 @@ pub async fn faucet(
         })
         .await?;
 
-    println!("Twitter User: {:#?}", twitter_user);
+    println!("Twitter User: {:#?}", twitter_user.username);
 
     let mut is_following_webb = false;
     let mut maybe_pagination_token: Option<String> = None;
+    let mut is_first_page = true;
 
-    while !is_following_webb && maybe_pagination_token.is_some() {
+    // Check if the user is following the webb twitter account
+    while is_first_page || !is_following_webb && maybe_pagination_token.is_some() {
         // Check if the user is following the webb twitter account
         // - the account username is `webbprotocol`
         // - the user id is `1355009685859033092`
@@ -129,6 +131,15 @@ pub async fn faucet(
         // The pagination token is used to get the next page of followers.
         let (is_following_webb_, maybe_pagination_token_) = match my_followers {
             Ok(followers) => {
+                // Get number of followers
+                let num_followers = followers.data.as_ref().map(|u| u.len()).unwrap_or_default();
+                let next_token = followers.meta.clone().and_then(|m| m.next_token);
+                println!(
+                    "Got {} followers, next token: {:?}",
+                    num_followers.to_string(),
+                    next_token
+                );
+
                 let webb_user_id = NumericId::new(WEBB_TWITTER_ACCOUNT_ID);
                 (
                     followers
@@ -136,21 +147,29 @@ pub async fn faucet(
                         .clone()
                         .map(|u| u.iter().any(|follower| follower.id == webb_user_id))
                         .unwrap_or(false),
-                    followers.meta.clone().and_then(|m| m.next_token),
+                    next_token,
                 )
             }
             Err(e) => return Err(Error::TwitterError(e)),
         };
+
         is_following_webb = is_following_webb_;
         maybe_pagination_token = maybe_pagination_token_;
+        is_first_page = false;
     }
 
     println!(
         "{:?} User {:?} is following webb: {:?}",
         Utc::now().to_rfc3339(),
-        twitter_user,
+        twitter_user.username,
         is_following_webb
     );
+
+    if !is_following_webb {
+        return Err(Error::Custom(
+            "User is not following the webb twitter account".to_string(),
+        ));
+    }
 
     // Check if the user's last claim date is within the last 24 hours
     let claim_data = auth_db
@@ -166,7 +185,7 @@ pub async fn faucet(
                 println!(
                     "{:?}  User {:?} tried to claim again before 24 hours",
                     Utc::now().to_rfc3339(),
-                    twitter_user
+                    twitter_user.username
                 );
                 return Err(Error::Custom(
                     "You can only claim once every 24 hours.".to_string(),
@@ -188,7 +207,7 @@ pub async fn faucet(
     println!(
         "{:?}  Claiming for user: {:?}",
         Utc::now().to_rfc3339(),
-        twitter_user,
+        twitter_user.username,
     );
     println!(
         "{:?} Paying {} on chain: {:?}",

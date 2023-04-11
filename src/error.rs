@@ -1,7 +1,9 @@
 use rocket::{
+    http::Status,
     request::Request,
     response::{Responder, Result},
     serde::json::Json,
+    Response,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -44,68 +46,72 @@ pub struct ErrorResponse {
 
 impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
     fn respond_to(self, req: &'r Request<'_>) -> Result<'o> {
-        match self {
+        let (response, status) = match self {
             Error::Oauth2(ref err) => match err.kind() {
-                rocket_oauth2::ErrorKind::InvalidUri(_) => {
-                    let response = ErrorResponse {
+                rocket_oauth2::ErrorKind::InvalidUri(_) => (
+                    ErrorResponse {
                         code: FaucetErrorCode::Oauth2InvalidUri,
                         message: self.to_string(),
-                    };
-                    Json(response).respond_to(req)
-                }
+                    },
+                    Status::BadRequest,
+                ),
                 rocket_oauth2::ErrorKind::ExchangeFailure
-                | rocket_oauth2::ErrorKind::ExchangeError(_) => {
-                    let response = ErrorResponse {
+                | rocket_oauth2::ErrorKind::ExchangeError(_) => (
+                    ErrorResponse {
                         code: FaucetErrorCode::Oauth2ExchangeFailure,
                         message: self.to_string(),
-                    };
-                    Json(response).respond_to(req)
-                }
-                rocket_oauth2::ErrorKind::Other => {
-                    let response = ErrorResponse {
+                    },
+                    Status::BadRequest,
+                ),
+                rocket_oauth2::ErrorKind::Other => (
+                    ErrorResponse {
                         code: FaucetErrorCode::Oauth2Unknown,
                         message: self.to_string(),
-                    };
-                    Json(response).respond_to(req)
-                }
+                    },
+                    Status::BadRequest,
+                ),
             },
             Error::AuthDatabase(ref err) => match err {
-                webb_auth_sled::Error::Sled(_) => {
-                    let response = ErrorResponse {
+                webb_auth_sled::Error::Sled(_) => (
+                    ErrorResponse {
                         code: FaucetErrorCode::DatabaseError,
                         message: self.to_string(),
-                    };
-                    Json(response).respond_to(req)
-                }
-                webb_auth_sled::Error::InvalidId(_) => {
-                    let response = ErrorResponse {
+                    },
+                    Status::InternalServerError,
+                ),
+                webb_auth_sled::Error::InvalidId(_) => (
+                    ErrorResponse {
                         code: FaucetErrorCode::DataSerializationError,
                         message: self.to_string(),
-                    };
-                    Json(response).respond_to(req)
-                }
-                webb_auth_sled::Error::Serde(_) => {
-                    let response = ErrorResponse {
+                    },
+                    Status::InternalServerError,
+                ),
+                webb_auth_sled::Error::Serde(_) => (
+                    ErrorResponse {
                         code: FaucetErrorCode::DataSerializationError,
                         message: self.to_string(),
-                    };
-                    Json(response).respond_to(req)
-                }
+                    },
+                    Status::InternalServerError,
+                ),
             },
-            Error::TwitterError(_) => {
-                let response = ErrorResponse {
+            Error::TwitterError(_) => (
+                ErrorResponse {
                     code: FaucetErrorCode::TwitterApiError,
                     message: self.to_string(),
-                };
-                Json(response).respond_to(req)
-            }
-            Error::Custom(_) => {
-                let response = ErrorResponse {
+                },
+                Status::BadRequest,
+            ),
+            Error::Custom(_) => (
+                ErrorResponse {
                     code: FaucetErrorCode::CustomError,
                     message: self.to_string(),
-                };
-                Json(response).respond_to(req)
-            }
-        }
+                },
+                Status::BadRequest,
+            ),
+        };
+
+        Response::build_from(Json(response).respond_to(req).unwrap())
+            .status(status)
+            .ok()
     }
 }

@@ -1,17 +1,25 @@
+use std::env;
+use std::sync::Arc;
+use std::time::Duration;
+
 use chrono::{Days, Utc};
+use ethers::prelude::{abigen, SignerMiddleware};
+use ethers::providers::{Http, Provider};
+use ethers::types::U256;
 use rocket::futures::{self, TryFutureExt};
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
-use webb_auth::model::UniversalWalletAddress;
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 
 use crate::auth;
 use crate::error::Error;
+use crate::helpers::address::MultiAddress;
+use crate::helpers::files::{get_rpc_url, get_token_address};
 
+const FAUCET_REQUEST_AMOUNT: u64 = 100;
 const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -21,56 +29,66 @@ pub struct Payload {
     faucet: FaucetRequest,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(crate = "rocket::serde")]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
-pub enum MultiAddress {
-    Ethereum(webb::evm::ethers::types::Address),
-    Substrate(webb::substrate::subxt::utils::AccountId32),
-}
-
-impl MultiAddress {
-    /// Returns `true` if the multi address is [`Ethereum`].
-    ///
-    /// [`Ethereum`]: MultiAddress::Ethereum
-    #[must_use]
-    pub fn is_ethereum(&self) -> bool {
-        matches!(self, Self::Ethereum(..))
-    }
-
-    /// Returns `true` if the multi address is [`Substrate`].
-    ///
-    /// [`Substrate`]: MultiAddress::Substrate
-    #[must_use]
-    pub fn is_substrate(&self) -> bool {
-        matches!(self, Self::Substrate(..))
-    }
-}
-
-impl core::fmt::Display for MultiAddress {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Ethereum(address) => write!(f, "{}", address),
-            Self::Substrate(address) => write!(f, "{}", address),
-        }
-    }
-}
-
-impl From<MultiAddress> for UniversalWalletAddress {
-    fn from(multi_address: MultiAddress) -> Self {
-        match multi_address {
-            MultiAddress::Ethereum(address) => Self::Ethereum(address.to_fixed_bytes()),
-            MultiAddress::Substrate(address) => Self::Substrate(address.0),
-        }
-    }
-}
-
 // Define the FaucetRequest struct to represent the faucet request data
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FaucetRequest {
     wallet_address: MultiAddress,
     typed_chain_id: webb_proposals::TypedChainId,
+}
+
+pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Error> {
+    // 1. Generate the ABI for the ERC20 contract. This is will define an `ERC20Contract` struct in
+    // this scope that will let us call the methods of the contract.
+    abigen!(
+        ERC20Contract,
+        r#"[
+            function balanceOf(address account) external view returns (uint256)
+            function decimals() external view returns (uint8)
+            function symbol() external view returns (string memory)
+            function transfer(address to, uint256 amount) external returns (bool)
+            event Transfer(address indexed from, address indexed to, uint256 value)
+        ]"#,
+    );
+
+    match faucet_req.typed_chain_id {
+        webb_proposals::TypedChainId::Evm(chain_id) => {
+            use ethers_signers::{coins_bip39::English, MnemonicBuilder};
+
+            let rpc_url = get_rpc_url(chain_id);
+            let provider =
+                Provider::<Http>::try_from(rpc_url)?.interval(Duration::from_millis(100u64));
+
+            let wallet = MnemonicBuilder::<English>::default()
+                .phrase("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+                .build()
+                .map_err(|e| {
+                    Error::Custom(e.to_string())
+                })?;
+            let signer = Arc::new(SignerMiddleware::new(provider, wallet));
+
+            let token_address = get_token_address(chain_id);
+            let contract = ERC20Contract::new(token_address, signer);
+
+            // 3. Fetch the decimals used by the contract so we can compute the decimal amount to send.
+            let decimals = contract
+                .decimals()
+                .call()
+                .await
+                .map_err(|e| Error::Custom(e.to_string()))?;
+            let decimal_amount = U256::from(FAUCET_REQUEST_AMOUNT) * U256::exp10(decimals as usize);
+
+            // 4. Transfer the desired amount of tokens to the `to_address`
+            let evm_address = faucet_req.wallet_address.ethereum().unwrap();
+            let tx = contract.transfer(*evm_address, decimal_amount);
+            let pending_tx = tx.send().await.map_err(|e| Error::Custom(e.to_string()))?;
+            let _mined_tx = pending_tx.await.map_err(|e| Error::Custom(e.to_string()))?;
+        }
+        webb_proposals::TypedChainId::Substrate(chain_id) => {}
+        _ => todo!(),
+    };
+
+    Ok(())
 }
 
 #[post("/faucet", data = "<payload>")]
@@ -215,6 +233,8 @@ pub async fn faucet(
         wallet_address,
         typed_chain_id
     );
+
+    handle_token_transfer().await?;
     // TODO: Handle tx and return the hash
     let tx_hash = "0x1234";
     Ok(status::Accepted(Some(

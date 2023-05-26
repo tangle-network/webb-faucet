@@ -16,6 +16,7 @@ use webb_auth_sled::SledAuthDb;
 pub mod auth;
 pub mod error;
 pub mod faucet;
+pub mod helpers;
 
 fn provider_fairing<P: auth::providers::Provider + 'static>() -> impl Fairing {
     OAuth2::<P>::fairing(P::name())

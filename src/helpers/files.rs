@@ -1,5 +1,4 @@
 use hex;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -32,12 +31,6 @@ macro_rules! read_json {
     }};
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct RpcData {
-    chainId: u32,
-    rpc: Vec<String>,
-}
-
 pub fn read_rpc_data() -> HashMap<u32, Vec<String>> {
     read_json!("chainIdRpcs.json", HashMap<u32, Vec<String>>)
 }
@@ -46,18 +39,22 @@ pub fn read_token_address_data() -> HashMap<u32, String> {
     read_json!("chainIdFaucetToken.json", HashMap<u32, String>)
 }
 
-pub fn get_rpc_url(chain_id: u32) -> String {
+pub fn get_evm_rpc_url(chain_id: u32) -> String {
     let rpc_map = read_rpc_data();
-    let rpc_data = rpc_map
-        .get(&chain_id)
-        .unwrap_or(&vec!["http://localhost:8545".to_string()]);
+    let binding = vec!["http://localhost:8545".to_string()];
+    let rpc_data = rpc_map.get(&chain_id).unwrap_or(&binding);
     rpc_data[0].clone()
 }
 
-pub fn get_token_address(chain_id: u32) -> [u8; 20] {
+pub fn get_substrate_rpc_url(_chain_id: u32) -> String {
+    // TODO: Decide if we want to push this into config
+    let url = "ws://127.0.0.1:9944";
+    url.to_string()
+}
+
+pub fn get_evm_token_address(chain_id: u32) -> [u8; 20] {
     let token_map = read_token_address_data();
-    let token_data = token_map
-        .get(&chain_id)
-        .unwrap_or(&"0x00000000000000000000000000000000".to_string());
+    let binding = "0x00000000000000000000000000000000".to_string();
+    let token_data = token_map.get(&chain_id).unwrap_or(&binding);
     convert_hex_to_bytes(token_data).unwrap_or([0u8; 20])
 }

@@ -1,4 +1,3 @@
-use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,17 +9,23 @@ use rocket::futures::{self, TryFutureExt};
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::json;
+use sp_core::Pair;
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
+use webb::substrate::subxt::OnlineClient;
+use webb::substrate::subxt::{tx::PairSigner, PolkadotConfig};
+use webb::substrate::tangle_runtime::api as RuntimeApi;
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 
 use crate::auth;
 use crate::error::Error;
 use crate::helpers::address::MultiAddress;
-use crate::helpers::files::{get_rpc_url, get_token_address};
+use crate::helpers::files::{get_evm_rpc_url, get_evm_token_address, get_substrate_rpc_url};
 
 const FAUCET_REQUEST_AMOUNT: u64 = 100;
 const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
+const TEMP_MNEMONIC: &str =
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -55,19 +60,18 @@ pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Erro
         webb_proposals::TypedChainId::Evm(chain_id) => {
             use ethers_signers::{coins_bip39::English, MnemonicBuilder};
 
-            let rpc_url = get_rpc_url(chain_id);
-            let provider =
-                Provider::<Http>::try_from(rpc_url)?.interval(Duration::from_millis(100u64));
+            let rpc_url = get_evm_rpc_url(chain_id);
+            let provider = Provider::<Http>::try_from(rpc_url)
+                .map_err(|e| Error::Custom(e.to_string()))?
+                .interval(Duration::from_millis(100u64));
 
             let wallet = MnemonicBuilder::<English>::default()
-                .phrase("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+                .phrase(TEMP_MNEMONIC)
                 .build()
-                .map_err(|e| {
-                    Error::Custom(e.to_string())
-                })?;
+                .map_err(|e| Error::Custom(e.to_string()))?;
             let signer = Arc::new(SignerMiddleware::new(provider, wallet));
 
-            let token_address = get_token_address(chain_id);
+            let token_address = get_evm_token_address(chain_id);
             let contract = ERC20Contract::new(token_address, signer);
 
             // 3. Fetch the decimals used by the contract so we can compute the decimal amount to send.
@@ -84,8 +88,42 @@ pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Erro
             let pending_tx = tx.send().await.map_err(|e| Error::Custom(e.to_string()))?;
             let _mined_tx = pending_tx.await.map_err(|e| Error::Custom(e.to_string()))?;
         }
-        webb_proposals::TypedChainId::Substrate(chain_id) => {}
-        _ => todo!(),
+        webb_proposals::TypedChainId::Substrate(chain_id) => {
+            let rpc_url = get_substrate_rpc_url(chain_id);
+            // Create a new API client, configured to talk to Polkadot nodes.
+            let api = OnlineClient::<PolkadotConfig>::from_url(rpc_url)
+                .await
+                .map_err(|e| Error::Custom(e.to_string()))?;
+
+            // Build a balance transfer extrinsic.
+            let dest = faucet_req.wallet_address.substrate().unwrap();
+            let address = webb::substrate::subxt::utils::MultiAddress::Id(dest.clone());
+            let balance_transfer_tx = RuntimeApi::tx()
+                .balances()
+                .transfer(address, FAUCET_REQUEST_AMOUNT.into());
+
+            // Submit the balance transfer extrinsic from Alice, and wait for it to be successful
+            // and in a finalized block. We get back the extrinsic events if all is well.
+            let sr25519_pair = sp_core::sr25519::Pair::from_string(TEMP_MNEMONIC, None).unwrap();
+            let from = PairSigner::new(sr25519_pair);
+            let events = api
+                .tx()
+                .sign_and_submit_then_watch_default(&balance_transfer_tx, &from)
+                .await
+                .map_err(|e| Error::Custom(e.to_string()))?
+                .wait_for_finalized_success()
+                .await
+                .map_err(|e| Error::Custom(e.to_string()))?;
+
+            // Find a Transfer event and print it.
+            let transfer_event = events
+                .find_first::<RuntimeApi::balances::events::Transfer>()
+                .map_err(|e| Error::Custom(e.to_string()))?;
+            if let Some(event) = transfer_event {
+                println!("Balance transfer success: {event:?}");
+            }
+        }
+        _ => return Err(Error::Custom("Invalid chain id".to_string())),
     };
 
     Ok(())
@@ -104,7 +142,7 @@ pub async fn faucet(
     let FaucetRequest {
         wallet_address,
         typed_chain_id,
-    } = faucet_data;
+    } = faucet_data.clone();
     println!(
         "Requesting faucet for (address {}, chain: {:?}",
         wallet_address, typed_chain_id
@@ -154,8 +192,7 @@ pub async fn faucet(
                 let next_token = followers.meta.clone().and_then(|m| m.next_token);
                 println!(
                     "Got {} followers, next token: {:?}",
-                    num_followers.to_string(),
-                    next_token
+                    num_followers, next_token
                 );
 
                 let webb_user_id = NumericId::new(WEBB_TWITTER_ACCOUNT_ID);
@@ -234,7 +271,7 @@ pub async fn faucet(
         typed_chain_id
     );
 
-    handle_token_transfer().await?;
+    handle_token_transfer(faucet_data).await?;
     // TODO: Handle tx and return the hash
     let tx_hash = "0x1234";
     Ok(status::Accepted(Some(

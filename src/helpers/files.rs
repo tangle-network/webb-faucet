@@ -31,28 +31,28 @@ macro_rules! read_json {
     }};
 }
 
-pub fn read_rpc_data() -> HashMap<u32, Vec<String>> {
-    read_json!("chainIdRpcs.json", HashMap<u32, Vec<String>>)
+pub fn read_rpc_data() -> HashMap<u64, Vec<String>> {
+    read_json!("chainIdRpcs.json", HashMap<u64, Vec<String>>)
 }
 
-pub fn read_token_address_data() -> HashMap<u32, String> {
-    read_json!("chainIdFaucetToken.json", HashMap<u32, String>)
+pub fn read_token_address_data() -> HashMap<u64, String> {
+    read_json!("chainIdFaucetToken.json", HashMap<u64, String>)
 }
 
-pub fn get_evm_rpc_url(chain_id: u32) -> String {
+pub fn get_evm_rpc_url(chain_id: u64) -> String {
     let rpc_map = read_rpc_data();
     let binding = vec!["http://localhost:8545".to_string()];
     let rpc_data = rpc_map.get(&chain_id).unwrap_or(&binding);
     rpc_data[0].clone()
 }
 
-pub fn get_substrate_rpc_url(_chain_id: u32) -> String {
+pub fn get_substrate_rpc_url(_chain_id: u64) -> String {
     // TODO: Decide if we want to push this into config
     let url = "ws://127.0.0.1:9944";
     url.to_string()
 }
 
-pub fn get_evm_token_address(chain_id: u32) -> [u8; 20] {
+pub fn get_evm_token_address(chain_id: u64) -> [u8; 20] {
     let token_map = read_token_address_data();
     let binding = "0x00000000000000000000000000000000".to_string();
     let token_data = token_map.get(&chain_id).unwrap_or(&binding);

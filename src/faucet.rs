@@ -2,15 +2,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Days, Utc};
-use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Http, Provider};
-use ethers::types::U256;
 use rocket::futures::{self, TryFutureExt};
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::json;
 use sp_core::Pair;
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
+use webb::evm::ethers::abi::{AbiEncode, Contract};
+use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
+use webb::evm::ethers::prelude::{abigen, signer, SignerMiddleware};
+use webb::evm::ethers::providers::{Http, Provider};
+use webb::evm::ethers::signers::Wallet;
+use webb::evm::ethers::types::U256;
 use webb::substrate::subxt::OnlineClient;
 use webb::substrate::subxt::{tx::PairSigner, PolkadotConfig};
 use webb::substrate::tangle_runtime::api as RuntimeApi;
@@ -21,11 +24,10 @@ use crate::auth;
 use crate::error::Error;
 use crate::helpers::address::MultiAddress;
 use crate::helpers::files::{get_evm_rpc_url, get_evm_token_address, get_substrate_rpc_url};
+use crate::txes::types::{EvmProviders, SubstrateProviders};
 
 const FAUCET_REQUEST_AMOUNT: u64 = 100;
 const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
-const TEMP_MNEMONIC: &str =
-    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -42,7 +44,13 @@ pub struct FaucetRequest {
     typed_chain_id: webb_proposals::TypedChainId,
 }
 
-pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Error> {
+pub async fn handle_token_transfer(
+    faucet_req: FaucetRequest,
+    evm_providers: &State<EvmProviders<Provider<Http>>>,
+    substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
+    evm_wallet: &State<Wallet<SigningKey>>,
+    substrate_wallet: &State<PairSigner<PolkadotConfig, sp_core::sr25519::Pair>>,
+) -> Result<(), Error> {
     // 1. Generate the ABI for the ERC20 contract. This is will define an `ERC20Contract` struct in
     // this scope that will let us call the methods of the contract.
     abigen!(
@@ -58,21 +66,16 @@ pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Erro
 
     match faucet_req.typed_chain_id {
         webb_proposals::TypedChainId::Evm(chain_id) => {
-            use ethers_signers::{coins_bip39::English, MnemonicBuilder};
-
-            let rpc_url = get_evm_rpc_url(chain_id);
-            let provider = Provider::<Http>::try_from(rpc_url)
-                .map_err(|e| Error::Custom(e.to_string()))?
-                .interval(Duration::from_millis(100u64));
-
-            let wallet = MnemonicBuilder::<English>::default()
-                .phrase(TEMP_MNEMONIC)
-                .build()
-                .map_err(|e| Error::Custom(e.to_string()))?;
-            let signer = Arc::new(SignerMiddleware::new(provider, wallet));
-
-            let token_address = get_evm_token_address(chain_id);
-            let contract = ERC20Contract::new(token_address, signer);
+            let provider = evm_providers
+                .providers
+                .get(&chain_id.into())
+                .ok_or(Error::Custom(format!(
+                    "No provider found for chain id {}",
+                    chain_id
+                )))?
+                .clone();
+            let token_address = get_evm_token_address(chain_id.into());
+            let contract = ERC20Contract::new(token_address, Arc::new(provider));
 
             // 3. Fetch the decimals used by the contract so we can compute the decimal amount to send.
             let decimals = contract
@@ -89,12 +92,14 @@ pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Erro
             let _mined_tx = pending_tx.await.map_err(|e| Error::Custom(e.to_string()))?;
         }
         webb_proposals::TypedChainId::Substrate(chain_id) => {
-            let rpc_url = get_substrate_rpc_url(chain_id);
-            // Create a new API client, configured to talk to Polkadot nodes.
-            let api = OnlineClient::<PolkadotConfig>::from_url(rpc_url)
-                .await
-                .map_err(|e| Error::Custom(e.to_string()))?;
-
+            let api = substrate_providers
+                .providers
+                .get(&chain_id.into())
+                .ok_or(Error::Custom(format!(
+                    "No provider found for chain id {}",
+                    chain_id
+                )))?
+                .clone();
             // Build a balance transfer extrinsic.
             let dest = faucet_req.wallet_address.substrate().unwrap();
             let address = webb::substrate::subxt::utils::MultiAddress::Id(dest.clone());
@@ -102,13 +107,10 @@ pub async fn handle_token_transfer(faucet_req: FaucetRequest) -> Result<(), Erro
                 .balances()
                 .transfer(address, FAUCET_REQUEST_AMOUNT.into());
 
-            // Submit the balance transfer extrinsic from Alice, and wait for it to be successful
-            // and in a finalized block. We get back the extrinsic events if all is well.
-            let sr25519_pair = sp_core::sr25519::Pair::from_string(TEMP_MNEMONIC, None).unwrap();
-            let from = PairSigner::new(sr25519_pair);
+            let from = substrate_wallet.inner();
             let events = api
                 .tx()
-                .sign_and_submit_then_watch_default(&balance_transfer_tx, &from)
+                .sign_and_submit_then_watch_default(&balance_transfer_tx, from)
                 .await
                 .map_err(|e| Error::Custom(e.to_string()))?
                 .wait_for_finalized_success()
@@ -134,6 +136,10 @@ pub async fn faucet(
     twitter_bearer_token: auth::TwitterBearerToken<'_>,
     payload: Json<Payload>,
     auth_db: &State<SledAuthDb>,
+    evm_providers: &State<EvmProviders<Provider<Http>>>,
+    substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
+    evm_wallet: &State<Wallet<SigningKey>>,
+    substrate_wallet: &State<PairSigner<PolkadotConfig, sp_core::sr25519::Pair>>,
 ) -> Result<status::Accepted<String>, Error> {
     let faucet_data = payload.clone().into_inner().faucet;
     let auth = BearerToken::new(twitter_bearer_token.token());
@@ -271,7 +277,14 @@ pub async fn faucet(
         typed_chain_id
     );
 
-    handle_token_transfer(faucet_data).await?;
+    handle_token_transfer(
+        faucet_data,
+        evm_providers,
+        substrate_providers,
+        evm_wallet,
+        substrate_wallet,
+    )
+    .await?;
     // TODO: Handle tx and return the hash
     let tx_hash = "0x1234";
     Ok(status::Accepted(Some(

@@ -1,6 +1,15 @@
-use super::networks::Network;
 use std::collections::HashMap;
-use webb::evm::ethers::{prelude::k256::U256, types::Address};
+
+use ethers::types::U256;
+use ethers::{
+    providers::{Http, Provider},
+    types::{Address, TransactionReceipt},
+};
+use rocket::tokio::sync::oneshot;
+use serde::{Deserialize, Serialize};
+use webb::substrate::subxt::{utils::AccountId32, OnlineClient, PolkadotConfig};
+
+use crate::error::Error;
 
 pub struct EvmProviders<T> {
     pub providers: HashMap<u64, T>,
@@ -10,25 +19,26 @@ pub struct SubstrateProviders<T> {
     pub providers: HashMap<u64, T>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum TxResult {
+    Evm(TransactionReceipt),
+    Substrate(webb::substrate::subxt::utils::H256),
+}
+
 pub enum Transaction {
-    EVM(EvmTransaction),
-    Substrate(SubstrateTransaction),
-}
-
-pub struct EvmTransaction {
-    // Here you can add the necessary details for an EVM transaction
-    // For example, the following are commonly included in a transaction
-    pub network: Network,
-    pub from: Address,
-    pub to: Address,
-    pub value: U256,
-    pub gas_price: U256,
-    pub gas: U256,
-    pub nonce: U256,
-    pub data: Vec<u8>,
-}
-
-pub struct SubstrateTransaction {
-    // Here you can add the necessary details for a Substrate transaction
-    // Details will be specific to your use case
+    Evm {
+        provider: Provider<Http>,
+        to: Address,
+        amount: U256,
+        token_address: Option<Address>,
+        result_sender: oneshot::Sender<Result<TxResult, Error>>,
+    },
+    Substrate {
+        api: OnlineClient<PolkadotConfig>,
+        to: AccountId32,
+        amount: u128,
+        asset_id: Option<u32>,
+        signer: sp_core::sr25519::Pair,
+        result_sender: oneshot::Sender<Result<TxResult, Error>>,
+    },
 }

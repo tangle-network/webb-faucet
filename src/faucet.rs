@@ -3,20 +3,19 @@ use std::sync::Arc;
 use chrono::{Days, Utc};
 
 use rocket::futures::{self, TryFutureExt};
+use rocket::tokio::sync::mpsc::UnboundedSender;
+use rocket::tokio::sync::oneshot;
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::json;
 
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
 
-use webb::evm::ethers::prelude::abigen;
 use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
 use webb::evm::ethers::providers::{Http, Provider};
 use webb::evm::ethers::signers::Wallet;
-use webb::evm::ethers::types::U256;
 use webb::substrate::subxt::OnlineClient;
 use webb::substrate::subxt::{tx::PairSigner, PolkadotConfig};
-use webb::substrate::tangle_runtime::api as RuntimeApi;
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 
@@ -24,10 +23,10 @@ use crate::auth;
 use crate::error::Error;
 use crate::helpers::address::MultiAddress;
 use crate::helpers::files::get_evm_token_address;
-use crate::txes::types::{EvmProviders, SubstrateProviders};
+use crate::txes::types::{EvmProviders, SubstrateProviders, Transaction, TxResult};
 
-const FAUCET_REQUEST_AMOUNT: u64 = 100;
-const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
+pub const FAUCET_REQUEST_AMOUNT: u64 = 100;
+pub const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -49,24 +48,13 @@ pub async fn handle_token_transfer(
     evm_providers: &State<EvmProviders<Provider<Http>>>,
     substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
     _evm_wallet: &State<Wallet<SigningKey>>,
-    substrate_wallet: &State<PairSigner<PolkadotConfig, sp_core::sr25519::Pair>>,
-) -> Result<Vec<u8>, Error> {
-    let tx_hash = match faucet_req.typed_chain_id {
+    signer_pair: &State<sp_core::sr25519::Pair>,
+    tx_sender: &State<UnboundedSender<Transaction>>,
+) -> Result<TxResult, Error> {
+    let (result_sender, result_receiver) = oneshot::channel();
+    match faucet_req.typed_chain_id {
         webb_proposals::TypedChainId::Evm(chain_id) => {
-            // 1. Generate the ABI for the ERC20 contract. This is will define an `ERC20Contract` struct in
-            // this scope that will let us call the methods of the contract.
-            abigen!(
-                ERC20Contract,
-                r#"[
-                    function balanceOf(address account) external view returns (uint256)
-                    function decimals() external view returns (uint8)
-                    function symbol() external view returns (string memory)
-                    function transfer(address to, uint256 amount) external returns (bool)
-                    event Transfer(address indexed from, address indexed to, uint256 value)
-                ]"#,
-            );
-
-            // 2. Create a provider for the chain id and instantiate the contract.
+            // Create a provider for the chain id and instantiate the contract.
             let provider = evm_providers
                 .providers
                 .get(&chain_id.into())
@@ -76,25 +64,16 @@ pub async fn handle_token_transfer(
                 )))?
                 .clone();
             let token_address = get_evm_token_address(chain_id.into());
-            let contract = ERC20Contract::new(token_address, Arc::new(provider));
+            let dest = faucet_req.wallet_address.ethereum().unwrap().clone();
 
-            // 3. Fetch the decimals used by the contract so we can compute the decimal amount to send.
-            let decimals = contract
-                .decimals()
-                .call()
-                .await
-                .map_err(|e| Error::Custom(e.to_string()))?;
-            let decimal_amount = U256::from(FAUCET_REQUEST_AMOUNT) * U256::exp10(decimals as usize);
-
-            // 4. Transfer the desired amount of tokens to the `to_address`
-            let evm_address = faucet_req.wallet_address.ethereum().unwrap();
-            let tx = contract.transfer(*evm_address, decimal_amount);
-            let pending_tx = tx.send().await.map_err(|e| Error::Custom(e.to_string()))?;
-            let tx_hash = pending_tx.tx_hash().as_fixed_bytes().to_vec();
-            let _mined_tx = pending_tx.await.map_err(|e| Error::Custom(e.to_string()))?;
-
-            // 5. Return the transaction hash.
-            tx_hash
+            // Send transaction to the processor.
+            tx_sender.send(Transaction::Evm {
+                provider,
+                to: dest,
+                amount: FAUCET_REQUEST_AMOUNT.into(),
+                token_address: Some(token_address.into()),
+                result_sender,
+            });
         }
         webb_proposals::TypedChainId::Substrate(chain_id) => {
             // 1. Create a provider for the chain id.
@@ -108,41 +87,35 @@ pub async fn handle_token_transfer(
                 .clone();
 
             // 2. Build a balance transfer extrinsic.
-            let dest = faucet_req.wallet_address.substrate().unwrap();
-            let address = webb::substrate::subxt::utils::MultiAddress::Id(dest.clone());
-            let balance_transfer_tx = RuntimeApi::tx()
-                .balances()
-                .transfer(address, FAUCET_REQUEST_AMOUNT.into());
-
-            // 3. Sign and submit the extrinsic.
-            let tx_result = api
-                .tx()
-                .sign_and_submit_then_watch_default(&balance_transfer_tx, substrate_wallet.inner())
-                .await
-                .map_err(|e| Error::Custom(e.to_string()))?;
-
-            let tx_hash = tx_result.extrinsic_hash();
-
-            let events = tx_result
-                .wait_for_finalized_success()
-                .await
-                .map_err(|e| Error::Custom(e.to_string()))?;
-
-            // 4. Find a Transfer event and print it.
-            let transfer_event = events
-                .find_first::<RuntimeApi::balances::events::Transfer>()
-                .map_err(|e| Error::Custom(e.to_string()))?;
-            if let Some(event) = transfer_event {
-                println!("Balance transfer success: {event:?}");
-            }
-
-            // 5. Return the transaction hash.
-            tx_hash.to_fixed_bytes().to_vec()
+            let dest = faucet_req.wallet_address.substrate().unwrap().clone();
+            tx_sender.send(Transaction::Substrate {
+                api,
+                to: dest,
+                amount: FAUCET_REQUEST_AMOUNT.into(),
+                asset_id: None,
+                signer: signer_pair.inner().clone(),
+                result_sender,
+            });
         }
         _ => return Err(Error::Custom("Invalid chain id".to_string())),
     };
 
-    Ok(tx_hash)
+    // await the result
+    let result = match result_receiver.await {
+        Ok(res) => match res {
+            Ok(tx_result) => tx_result, // if transaction execution was successful
+            Err(e) => return Err(e),    // if transaction execution resulted in an error
+        },
+        Err(e) => {
+            return Err(Error::Custom(format!(
+                "Transaction was not processed: {}",
+                e
+            )))
+        }
+    };
+
+    // proceed with your result
+    Ok(result)
 }
 
 #[post("/faucet", data = "<payload>")]
@@ -153,7 +126,8 @@ pub async fn faucet(
     evm_providers: &State<EvmProviders<Provider<Http>>>,
     substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
     evm_wallet: &State<Wallet<SigningKey>>,
-    substrate_wallet: &State<PairSigner<PolkadotConfig, sp_core::sr25519::Pair>>,
+    signer_pair: &State<sp_core::sr25519::Pair>,
+    tx_sender: &State<UnboundedSender<Transaction>>,
 ) -> Result<status::Accepted<String>, Error> {
     let faucet_data = payload.clone().into_inner().faucet;
     let auth = BearerToken::new(twitter_bearer_token.token());
@@ -299,7 +273,8 @@ pub async fn faucet(
             evm_providers,
             substrate_providers,
             evm_wallet,
-            substrate_wallet,
+            signer_pair,
+            tx_sender,
         )
         .await
         {

@@ -6,6 +6,7 @@ use std::{collections::HashMap, path::PathBuf};
 use error::Error;
 use ethers::{prelude::MiddlewareBuilder, signers::Signer, types::PathOrString};
 use helpers::files::{get_evm_rpc_url, get_substrate_rpc_url};
+use rocket::tokio::sync::mpsc;
 use rocket::{
     fairing::{AdHoc, Fairing},
     futures::{stream::FuturesUnordered, StreamExt},
@@ -18,6 +19,7 @@ use serde::Deserialize;
 use sp_core::Pair;
 use txes::{
     networks::Network,
+    processor::TransactionProcessingSystem,
     types::{EvmProviders, SubstrateProviders},
 };
 use webb::{
@@ -88,17 +90,13 @@ fn ethers_wallet_firing() -> impl Fairing {
 
 fn substrate_wallet_firing() -> impl Fairing {
     AdHoc::try_on_ignite("Open substrate wallet", |rocket| async {
-        let maybe_wallet: Result<PairSigner<PolkadotConfig, _>, Error> =
-            match rocket.state::<AppConfig>() {
-                Some(config) => {
-                    let mnemonic: String = config.mnemonic.parse().unwrap();
-                    match sp_core::sr25519::Pair::from_string(&mnemonic, None) {
-                        Ok(pair) => Ok(PairSigner::new(pair)),
-                        Err(_) => return Err(rocket),
-                    }
-                }
-                None => return Err(rocket),
-            };
+        let maybe_wallet = match rocket.state::<AppConfig>() {
+            Some(config) => {
+                let mnemonic: String = config.mnemonic.parse().unwrap();
+                sp_core::sr25519::Pair::from_string(&mnemonic, None)
+            }
+            None => return Err(rocket),
+        };
 
         match maybe_wallet {
             Ok(wallet) => Ok(rocket.manage(wallet)),
@@ -219,6 +217,13 @@ async fn rocket() -> _ {
         )
         .allow_credentials(true);
 
+    // Create the channel
+    let (tx_sender, rx_receiver) = mpsc::unbounded_channel();
+
+    // Pass the receiver to your transaction processing system
+    let tx_processing_system = TransactionProcessingSystem::new(rx_receiver);
+    tx_processing_system.run();
+
     rocket::build()
         .attach(AdHoc::config::<AppConfig>())
         .attach(auth_db_firing())
@@ -229,6 +234,7 @@ async fn rocket() -> _ {
         .attach(substrate_wallet_firing())
         .attach(cors.to_cors().unwrap())
         .manage(cors.to_cors().unwrap())
+        .manage(tx_sender)
         .mount("/", rocket_cors::catch_all_options_routes())
         .mount("/", routes![auth::login::twitter, faucet::faucet,])
 }

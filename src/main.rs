@@ -4,7 +4,7 @@ extern crate rocket;
 use std::{collections::HashMap, path::PathBuf};
 
 use error::Error;
-use ethers::{prelude::MiddlewareBuilder, signers::Signer};
+use ethers::{prelude::MiddlewareBuilder, signers::Signer, types::PathOrString};
 use helpers::files::{get_evm_rpc_url, get_substrate_rpc_url};
 use rocket::{
     fairing::{AdHoc, Fairing},
@@ -24,8 +24,8 @@ use webb::{
     evm::ethers::{
         prelude::{
             gas_escalator::{Frequency, GasEscalatorMiddleware, GeometricGasPrice},
-            gas_oracle::{GasNow, GasOracleMiddleware},
-            NonceManagerMiddleware, SignerMiddleware,
+            gas_oracle::GasNow,
+            NonceManagerMiddleware,
         },
         providers::{Http, Provider},
         signers::{coins_bip39::English, MnemonicBuilder},
@@ -67,49 +67,90 @@ fn auth_db_firing() -> impl Fairing {
     })
 }
 
-fn ethers_providers_firing() -> impl Fairing {
-    AdHoc::on_ignite("Open provider", |rocket| async {
-        let result = match rocket.state::<AppConfig>() {
+fn ethers_wallet_firing() -> impl Fairing {
+    AdHoc::try_on_ignite("Open ethers-rs wallet", |rocket| async {
+        let maybe_wallet = match rocket.state::<AppConfig>() {
             Some(config) => {
-                let networks = vec![Network::Athena, Network::Hermes, Network::Demeter];
-
-                let mnemonic = config.mnemonic.parse().unwrap();
-                let wallet = match MnemonicBuilder::<English>::default()
-                    .phrase(mnemonic)
+                let mnemonic: String = config.mnemonic.parse().unwrap();
+                MnemonicBuilder::<English>::default()
+                    .phrase(PathOrString::String(mnemonic))
                     .build()
-                {
-                    Ok(wallet) => wallet,
-                    Err(_) => return Err(rocket),
-                };
-                rocket.manage(wallet);
-
-                let providers: Vec<_> = networks
-                    .iter()
-                    .map(|net| net.to_evm_chain_id().unwrap())
-                    .map(|chain_id| (chain_id, get_evm_rpc_url(chain_id)))
-                    .map(|(chain_id, url)| {
-                        let provider = Provider::<Http>::try_from(url)
-                            .unwrap()
-                            .wrap_into(|p| {
-                                let escalator = GeometricGasPrice::new(1.125, 60_u64, None::<u64>);
-                                GasEscalatorMiddleware::new(p, escalator, Frequency::PerBlock)
-                            })
-                            .wrap_into(|p| SignerMiddleware::new(p, wallet))
-                            .wrap_into(|p| GasOracleMiddleware::new(p, GasNow::new()))
-                            .wrap_into(|p| NonceManagerMiddleware::new(p, wallet.address()));
-                        (chain_id, provider)
-                    })
-                    .into_iter()
-                    .collect();
-
-                let provider_map: HashMap<u64, _> = HashMap::new();
-                for (chain_id, provider) in providers {
-                    provider_map.insert(chain_id, provider);
-                }
-                Ok(provider_map)
             }
-            None => Err(rocket),
+            None => return Err(rocket),
         };
+
+        match maybe_wallet {
+            Ok(wallet) => Ok(rocket.manage(wallet)),
+            Err(_) => Err(rocket),
+        }
+    })
+}
+
+fn substrate_wallet_firing() -> impl Fairing {
+    AdHoc::try_on_ignite("Open substrate wallet", |rocket| async {
+        let maybe_wallet: Result<PairSigner<PolkadotConfig, _>, Error> =
+            match rocket.state::<AppConfig>() {
+                Some(config) => {
+                    let mnemonic: String = config.mnemonic.parse().unwrap();
+                    match sp_core::sr25519::Pair::from_string(&mnemonic, None) {
+                        Ok(pair) => Ok(PairSigner::new(pair)),
+                        Err(_) => return Err(rocket),
+                    }
+                }
+                None => return Err(rocket),
+            };
+
+        match maybe_wallet {
+            Ok(wallet) => Ok(rocket.manage(wallet)),
+            Err(_) => Err(rocket),
+        }
+    })
+}
+
+fn ethers_providers_firing() -> impl Fairing {
+    AdHoc::try_on_ignite("Open provider", |rocket| async {
+        let result: Result<HashMap<u64, NonceManagerMiddleware<_>>, Error> =
+            match rocket.state::<AppConfig>() {
+                Some(config) => {
+                    let networks = vec![Network::Athena, Network::Hermes, Network::Demeter];
+
+                    let mnemonic: String = config.mnemonic.parse().unwrap();
+                    let wallet = match MnemonicBuilder::<English>::default()
+                        .phrase(PathOrString::String(mnemonic))
+                        .build()
+                    {
+                        Ok(wallet) => wallet,
+                        Err(_) => return Err(rocket),
+                    };
+
+                    let address = wallet.address();
+                    let providers: Vec<(_, _)> = networks
+                        .iter()
+                        .map(|net| net.to_evm_chain_id().unwrap())
+                        .map(|chain_id| (chain_id, get_evm_rpc_url(chain_id)))
+                        .map(|(chain_id, url)| {
+                            let escalator = GeometricGasPrice::new(1.125, 60_u64, None::<u64>);
+                            let gas_oracle = GasNow::new();
+                            let provider = Provider::<Http>::try_from(url)
+                                .unwrap()
+                                .wrap_into(|p| {
+                                    GasEscalatorMiddleware::new(p, escalator, Frequency::PerBlock)
+                                })
+                                .gas_oracle(gas_oracle)
+                                .with_signer(wallet.clone())
+                                .nonce_manager(address);
+                            (chain_id, provider)
+                        })
+                        .collect();
+
+                    let mut provider_map: HashMap<u64, _> = HashMap::new();
+                    for (chain_id, provider) in providers {
+                        provider_map.insert(chain_id, provider);
+                    }
+                    Ok(provider_map)
+                }
+                None => return Err(rocket),
+            };
 
         match result {
             Ok(provider_map) => Ok(rocket.manage(EvmProviders {
@@ -121,17 +162,12 @@ fn ethers_providers_firing() -> impl Fairing {
 }
 
 fn substrate_providers_firing() -> impl Fairing {
-    AdHoc::on_ignite("Open provider", |rocket| async {
-        let result = match rocket.state::<AppConfig>() {
-            Some(config) => {
+    AdHoc::try_on_ignite("Open provider", |rocket| async {
+        let result: Result<HashMap<u64, OnlineClient<PolkadotConfig>>, Error> = match rocket
+            .state::<AppConfig>(
+        ) {
+            Some(_config) => {
                 let networks = vec![Network::Tangle];
-
-                let mnemonic = config.mnemonic;
-                let from = match sp_core::sr25519::Pair::from_string(&mnemonic, None) {
-                    Ok(pair) => PairSigner::new(pair),
-                    Err(_) => return Err(rocket),
-                };
-                rocket.manage(from);
 
                 let mut futures_unordered = FuturesUnordered::new();
 
@@ -139,24 +175,21 @@ fn substrate_providers_firing() -> impl Fairing {
                     let chain_id = network.to_substrate_chain_id().unwrap();
                     let url = get_substrate_rpc_url(chain_id);
                     futures_unordered.push(async move {
-                        let api = OnlineClient::<PolkadotConfig>::from_url(url)
-                            .await
-                            .map_err(|e| Error::Custom(e.to_string()))?;
-                        Ok::<_, Error>((chain_id, api))
+                        let api = match OnlineClient::<PolkadotConfig>::from_url(url).await {
+                            Ok(api) => api,
+                            Err(e) => return Err(Error::Custom(e.to_string())),
+                        };
+                        Ok((chain_id, api))
                     });
                 }
 
                 let mut provider_map: HashMap<u64, OnlineClient<PolkadotConfig>> = HashMap::new();
-
                 while let Some(result) = futures_unordered.next().await {
                     match result {
                         Ok((chain_id, api)) => {
                             provider_map.insert(chain_id, api);
                         }
-                        Err(e) => {
-                            println!("Error while opening provider: {}", e);
-                            return Err(rocket);
-                        }
+                        Err(_e) => return Err(rocket),
                     }
                 }
 
@@ -191,6 +224,9 @@ async fn rocket() -> _ {
         .attach(auth_db_firing())
         .attach(provider_fairing::<auth::providers::Twitter>())
         .attach(ethers_providers_firing())
+        .attach(substrate_providers_firing())
+        .attach(ethers_wallet_firing())
+        .attach(substrate_wallet_firing())
         .attach(cors.to_cors().unwrap())
         .manage(cors.to_cors().unwrap())
         .mount("/", rocket_cors::catch_all_options_routes())

@@ -1,16 +1,15 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::{Days, Utc};
 use rocket::futures::{self, TryFutureExt};
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::json;
-use sp_core::Pair;
+
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
-use webb::evm::ethers::abi::{AbiEncode, Contract};
+
+use webb::evm::ethers::prelude::abigen;
 use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
-use webb::evm::ethers::prelude::{abigen, signer, SignerMiddleware};
 use webb::evm::ethers::providers::{Http, Provider};
 use webb::evm::ethers::signers::Wallet;
 use webb::evm::ethers::types::U256;
@@ -23,7 +22,7 @@ use webb_auth_sled::SledAuthDb;
 use crate::auth;
 use crate::error::Error;
 use crate::helpers::address::MultiAddress;
-use crate::helpers::files::{get_evm_rpc_url, get_evm_token_address, get_substrate_rpc_url};
+use crate::helpers::files::get_evm_token_address;
 use crate::txes::types::{EvmProviders, SubstrateProviders};
 
 const FAUCET_REQUEST_AMOUNT: u64 = 100;
@@ -48,7 +47,7 @@ pub async fn handle_token_transfer(
     faucet_req: FaucetRequest,
     evm_providers: &State<EvmProviders<Provider<Http>>>,
     substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
-    evm_wallet: &State<Wallet<SigningKey>>,
+    _evm_wallet: &State<Wallet<SigningKey>>,
     substrate_wallet: &State<PairSigner<PolkadotConfig, sp_core::sr25519::Pair>>,
 ) -> Result<(), Error> {
     // 1. Generate the ABI for the ERC20 contract. This is will define an `ERC20Contract` struct in

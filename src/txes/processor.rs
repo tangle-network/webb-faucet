@@ -20,12 +20,12 @@ pub async fn process_transactions(transaction_queue: &mut TransactionQueue) {
     }
 }
 
-async fn process_evm_transaction(evmt: EvmTransaction) {
+async fn process_evm_transaction(_evmt: EvmTransaction) {
     // implement the logic to process an EVM transaction here
     // probably you'll use the ethers library for this
 }
 
-async fn process_substrate_transaction(subt: SubstrateTransaction) {
+async fn process_substrate_transaction(_subt: SubstrateTransaction) {
     // implement the logic to process a Substrate transaction here
     // probably you'll use the subxt library for this
 }

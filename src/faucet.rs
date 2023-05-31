@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use chrono::{Days, Utc};
+
 use rocket::futures::{self, TryFutureExt};
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
@@ -49,22 +50,23 @@ pub async fn handle_token_transfer(
     substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
     _evm_wallet: &State<Wallet<SigningKey>>,
     substrate_wallet: &State<PairSigner<PolkadotConfig, sp_core::sr25519::Pair>>,
-) -> Result<(), Error> {
-    // 1. Generate the ABI for the ERC20 contract. This is will define an `ERC20Contract` struct in
-    // this scope that will let us call the methods of the contract.
-    abigen!(
-        ERC20Contract,
-        r#"[
-            function balanceOf(address account) external view returns (uint256)
-            function decimals() external view returns (uint8)
-            function symbol() external view returns (string memory)
-            function transfer(address to, uint256 amount) external returns (bool)
-            event Transfer(address indexed from, address indexed to, uint256 value)
-        ]"#,
-    );
-
-    match faucet_req.typed_chain_id {
+) -> Result<Vec<u8>, Error> {
+    let tx_hash = match faucet_req.typed_chain_id {
         webb_proposals::TypedChainId::Evm(chain_id) => {
+            // 1. Generate the ABI for the ERC20 contract. This is will define an `ERC20Contract` struct in
+            // this scope that will let us call the methods of the contract.
+            abigen!(
+                ERC20Contract,
+                r#"[
+                    function balanceOf(address account) external view returns (uint256)
+                    function decimals() external view returns (uint8)
+                    function symbol() external view returns (string memory)
+                    function transfer(address to, uint256 amount) external returns (bool)
+                    event Transfer(address indexed from, address indexed to, uint256 value)
+                ]"#,
+            );
+
+            // 2. Create a provider for the chain id and instantiate the contract.
             let provider = evm_providers
                 .providers
                 .get(&chain_id.into())
@@ -88,9 +90,14 @@ pub async fn handle_token_transfer(
             let evm_address = faucet_req.wallet_address.ethereum().unwrap();
             let tx = contract.transfer(*evm_address, decimal_amount);
             let pending_tx = tx.send().await.map_err(|e| Error::Custom(e.to_string()))?;
+            let tx_hash = pending_tx.tx_hash().as_fixed_bytes().to_vec();
             let _mined_tx = pending_tx.await.map_err(|e| Error::Custom(e.to_string()))?;
+
+            // 5. Return the transaction hash.
+            tx_hash
         }
         webb_proposals::TypedChainId::Substrate(chain_id) => {
+            // 1. Create a provider for the chain id.
             let api = substrate_providers
                 .providers
                 .get(&chain_id.into())
@@ -99,35 +106,43 @@ pub async fn handle_token_transfer(
                     chain_id
                 )))?
                 .clone();
-            // Build a balance transfer extrinsic.
+
+            // 2. Build a balance transfer extrinsic.
             let dest = faucet_req.wallet_address.substrate().unwrap();
             let address = webb::substrate::subxt::utils::MultiAddress::Id(dest.clone());
             let balance_transfer_tx = RuntimeApi::tx()
                 .balances()
                 .transfer(address, FAUCET_REQUEST_AMOUNT.into());
 
-            let from = substrate_wallet.inner();
-            let events = api
+            // 3. Sign and submit the extrinsic.
+            let tx_result = api
                 .tx()
-                .sign_and_submit_then_watch_default(&balance_transfer_tx, from)
+                .sign_and_submit_then_watch_default(&balance_transfer_tx, substrate_wallet.inner())
                 .await
-                .map_err(|e| Error::Custom(e.to_string()))?
+                .map_err(|e| Error::Custom(e.to_string()))?;
+
+            let tx_hash = tx_result.extrinsic_hash();
+
+            let events = tx_result
                 .wait_for_finalized_success()
                 .await
                 .map_err(|e| Error::Custom(e.to_string()))?;
 
-            // Find a Transfer event and print it.
+            // 4. Find a Transfer event and print it.
             let transfer_event = events
                 .find_first::<RuntimeApi::balances::events::Transfer>()
                 .map_err(|e| Error::Custom(e.to_string()))?;
             if let Some(event) = transfer_event {
                 println!("Balance transfer success: {event:?}");
             }
+
+            // 5. Return the transaction hash.
+            tx_hash.to_fixed_bytes().to_vec()
         }
         _ => return Err(Error::Custom("Invalid chain id".to_string())),
     };
 
-    Ok(())
+    Ok(tx_hash)
 }
 
 #[post("/faucet", data = "<payload>")]
@@ -276,17 +291,25 @@ pub async fn faucet(
         typed_chain_id
     );
 
+    let mut tx_hash = None;
     #[cfg(feature = "with-token-transfer")]
-    handle_token_transfer(
-        faucet_data,
-        evm_providers,
-        substrate_providers,
-        evm_wallet,
-        substrate_wallet,
-    )
-    .await?;
-    // TODO: Handle tx and return the hash
-    let tx_hash = "0x1234";
+    {
+        tx_hash = match handle_token_transfer(
+            faucet_data,
+            evm_providers,
+            substrate_providers,
+            evm_wallet,
+            substrate_wallet,
+        )
+        .await
+        {
+            Ok(tx_hash) => Some(tx_hash),
+            Err(e) => {
+                println!("Error transferring tokens: {:?}", e);
+                None
+            }
+        };
+    }
     Ok(status::Accepted(Some(
         json!({
             "wallet": wallet_address,

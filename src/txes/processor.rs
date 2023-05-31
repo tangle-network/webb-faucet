@@ -120,7 +120,7 @@ async fn handle_evm_native_tx<M: Middleware>(
             result_sender
                 .send(Err(Error::Custom("Failed to send transaction".to_string())))
                 .map_err(|e| Error::Custom(format!("Failed to send transaction: {:?}", e)))?;
-            return Err(Error::Custom("Failed to send transaction".to_string()));
+            Err(Error::Custom("Failed to send transaction".to_string()))
         }
     }
 }
@@ -151,7 +151,7 @@ async fn handle_evm_token_tx<M: Middleware>(
         .call()
         .await
         .map_err(|e| Error::Custom(e.to_string()))?;
-    let decimal_amount = U256::from(amount) * U256::exp10(decimals as usize);
+    let decimal_amount = amount * U256::exp10(decimals as usize);
 
     // Transfer the desired amount of tokens to the `to_address`
     let tx: ContractCall<M, _> = contract.transfer(to, decimal_amount);
@@ -167,7 +167,7 @@ async fn handle_evm_token_tx<M: Middleware>(
             result_sender
                 .send(Err(Error::Custom("Failed to send transaction".to_string())))
                 .map_err(|e| Error::Custom(format!("Failed to send transaction: {:?}", e)))?;
-            return Err(Error::Custom("Failed to send transaction".to_string()));
+            Err(Error::Custom("Failed to send transaction".to_string()))
         }
     }
 }
@@ -198,7 +198,7 @@ async fn handle_substrate_native_tx(
     let to_address = MultiAddress::Id(to.clone());
     let balance_transfer_tx = RuntimeApi::tx()
         .balances()
-        .transfer(to_address, amount.into());
+        .transfer(to_address, amount);
 
     // Sign and submit the extrinsic.
     let tx_result = api
@@ -241,7 +241,7 @@ async fn handle_substrate_token_tx(
     let to_address = MultiAddress::Id(to.clone());
     let token_transfer_tx = RuntimeApi::tx()
         .tokens()
-        .transfer(to_address, asset_id, amount.into());
+        .transfer(to_address, asset_id, amount);
 
     // Sign and submit the extrinsic.
     let tx_result = api
@@ -268,7 +268,7 @@ async fn handle_substrate_token_tx(
     // Return the transaction hash.
     result_sender
         .send(Ok(TxResult::Substrate(tx_hash)))
-        .map_err(|e| Error::Custom(format!("Failed to send tx_hash: {}", tx_hash)))?;
+        .map_err(|_e| Error::Custom(format!("Failed to send tx_hash: {}", tx_hash)))?;
 
     Ok(tx_hash)
 }

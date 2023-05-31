@@ -32,7 +32,7 @@ use webb::{
         providers::{Http, Provider},
         signers::{coins_bip39::English, MnemonicBuilder},
     },
-    substrate::subxt::{tx::PairSigner, OnlineClient, PolkadotConfig},
+    substrate::subxt::{OnlineClient, PolkadotConfig},
 };
 
 use webb_auth_sled::SledAuthDb;

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 use chrono::{Days, Utc};
 
@@ -15,7 +15,7 @@ use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
 use webb::evm::ethers::providers::{Http, Provider};
 use webb::evm::ethers::signers::Wallet;
 use webb::substrate::subxt::OnlineClient;
-use webb::substrate::subxt::{tx::PairSigner, PolkadotConfig};
+use webb::substrate::subxt::{PolkadotConfig};
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 
@@ -64,7 +64,7 @@ pub async fn handle_token_transfer(
                 )))?
                 .clone();
             let token_address = get_evm_token_address(chain_id.into());
-            let dest = faucet_req.wallet_address.ethereum().unwrap().clone();
+            let dest = *faucet_req.wallet_address.ethereum().unwrap();
 
             // Send transaction to the processor.
             tx_sender.send(Transaction::Evm {

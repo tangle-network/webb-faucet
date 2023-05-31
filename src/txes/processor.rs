@@ -196,9 +196,7 @@ async fn handle_substrate_native_tx(
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<H256, Error> {
     let to_address = MultiAddress::Id(to.clone());
-    let balance_transfer_tx = RuntimeApi::tx()
-        .balances()
-        .transfer(to_address, amount);
+    let balance_transfer_tx = RuntimeApi::tx().balances().transfer(to_address, amount);
 
     // Sign and submit the extrinsic.
     let tx_result = api

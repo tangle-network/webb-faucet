@@ -1,5 +1,3 @@
-
-
 use chrono::{Days, Utc};
 
 use rocket::futures::{self, TryFutureExt};
@@ -15,7 +13,7 @@ use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
 use webb::evm::ethers::providers::{Http, Provider};
 use webb::evm::ethers::signers::Wallet;
 use webb::substrate::subxt::OnlineClient;
-use webb::substrate::subxt::{PolkadotConfig};
+use webb::substrate::subxt::PolkadotConfig;
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 

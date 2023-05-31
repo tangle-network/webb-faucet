@@ -33,3 +33,7 @@ webb-auth = { path = "./auth" }
 webb = "0.5.22"
 webb-proposals = { git = "https://github.com/webb-tools/webb-rs.git" }
 rocket_cors = { git = "https://github.com/lawliet89/rocket_cors", branch = "master" }
+
+[features]
+default = ["with-token-transfer"]
+with-token-transfer = []

@@ -276,6 +276,7 @@ pub async fn faucet(
         typed_chain_id
     );
 
+    #[cfg(feature = "with-token-transfer")]
     handle_token_transfer(
         faucet_data,
         evm_providers,

@@ -1,68 +1,36 @@
 use chrono::{Days, Utc};
+
 use rocket::futures::{self, TryFutureExt};
+use rocket::tokio::sync::mpsc::UnboundedSender;
+use rocket::tokio::sync::oneshot;
 use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
+
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
-use webb_auth::model::UniversalWalletAddress;
+
+use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
+use webb::evm::ethers::providers::{Http, Provider};
+use webb::evm::ethers::signers::Wallet;
+use webb::substrate::subxt::OnlineClient;
+use webb::substrate::subxt::PolkadotConfig;
 use webb_auth::{model::ClaimsData, AuthDb};
 use webb_auth_sled::SledAuthDb;
 
 use crate::auth;
 use crate::error::Error;
+use crate::helpers::address::MultiAddress;
+use crate::helpers::files::get_evm_token_address;
+use crate::txes::types::{EvmProviders, SubstrateProviders, Transaction, TxResult};
 
-const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
+pub const FAUCET_REQUEST_AMOUNT: u64 = 100;
+pub const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(crate = "rocket::serde")]
 #[serde(rename_all = "camelCase")]
 pub struct Payload {
     faucet: FaucetRequest,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(crate = "rocket::serde")]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
-pub enum MultiAddress {
-    Ethereum(webb::evm::ethers::types::Address),
-    Substrate(webb::substrate::subxt::utils::AccountId32),
-}
-
-impl MultiAddress {
-    /// Returns `true` if the multi address is [`Ethereum`].
-    ///
-    /// [`Ethereum`]: MultiAddress::Ethereum
-    #[must_use]
-    pub fn is_ethereum(&self) -> bool {
-        matches!(self, Self::Ethereum(..))
-    }
-
-    /// Returns `true` if the multi address is [`Substrate`].
-    ///
-    /// [`Substrate`]: MultiAddress::Substrate
-    #[must_use]
-    pub fn is_substrate(&self) -> bool {
-        matches!(self, Self::Substrate(..))
-    }
-}
-
-impl core::fmt::Display for MultiAddress {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Ethereum(address) => write!(f, "{}", address),
-            Self::Substrate(address) => write!(f, "{}", address),
-        }
-    }
-}
-
-impl From<MultiAddress> for UniversalWalletAddress {
-    fn from(multi_address: MultiAddress) -> Self {
-        match multi_address {
-            MultiAddress::Ethereum(address) => Self::Ethereum(address.to_fixed_bytes()),
-            MultiAddress::Substrate(address) => Self::Substrate(address.0),
-        }
-    }
 }
 
 // Define the FaucetRequest struct to represent the faucet request data
@@ -73,11 +41,91 @@ pub struct FaucetRequest {
     typed_chain_id: webb_proposals::TypedChainId,
 }
 
+pub async fn handle_token_transfer(
+    faucet_req: FaucetRequest,
+    evm_providers: &State<EvmProviders<Provider<Http>>>,
+    substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
+    _evm_wallet: &State<Wallet<SigningKey>>,
+    signer_pair: &State<sp_core::sr25519::Pair>,
+    tx_sender: &State<UnboundedSender<Transaction>>,
+) -> Result<TxResult, Error> {
+    let (result_sender, result_receiver) = oneshot::channel();
+    match faucet_req.typed_chain_id {
+        webb_proposals::TypedChainId::Evm(chain_id) => {
+            // Create a provider for the chain id and instantiate the contract.
+            let provider = evm_providers
+                .providers
+                .get(&chain_id.into())
+                .ok_or(Error::Custom(format!(
+                    "No provider found for chain id {}",
+                    chain_id
+                )))?
+                .clone();
+            let token_address = get_evm_token_address(chain_id.into());
+            let dest = *faucet_req.wallet_address.ethereum().unwrap();
+
+            // Send transaction to the processor.
+            tx_sender.send(Transaction::Evm {
+                provider,
+                to: dest,
+                amount: FAUCET_REQUEST_AMOUNT.into(),
+                token_address: Some(token_address.into()),
+                result_sender,
+            });
+        }
+        webb_proposals::TypedChainId::Substrate(chain_id) => {
+            // 1. Create a provider for the chain id.
+            let api = substrate_providers
+                .providers
+                .get(&chain_id.into())
+                .ok_or(Error::Custom(format!(
+                    "No provider found for chain id {}",
+                    chain_id
+                )))?
+                .clone();
+
+            // 2. Build a balance transfer extrinsic.
+            let dest = faucet_req.wallet_address.substrate().unwrap().clone();
+            tx_sender.send(Transaction::Substrate {
+                api,
+                to: dest,
+                amount: FAUCET_REQUEST_AMOUNT.into(),
+                asset_id: None,
+                signer: signer_pair.inner().clone(),
+                result_sender,
+            });
+        }
+        _ => return Err(Error::Custom("Invalid chain id".to_string())),
+    };
+
+    // await the result
+    let result = match result_receiver.await {
+        Ok(res) => match res {
+            Ok(tx_result) => tx_result, // if transaction execution was successful
+            Err(e) => return Err(e),    // if transaction execution resulted in an error
+        },
+        Err(e) => {
+            return Err(Error::Custom(format!(
+                "Transaction was not processed: {}",
+                e
+            )))
+        }
+    };
+
+    // proceed with your result
+    Ok(result)
+}
+
 #[post("/faucet", data = "<payload>")]
 pub async fn faucet(
     twitter_bearer_token: auth::TwitterBearerToken<'_>,
     payload: Json<Payload>,
     auth_db: &State<SledAuthDb>,
+    evm_providers: &State<EvmProviders<Provider<Http>>>,
+    substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
+    evm_wallet: &State<Wallet<SigningKey>>,
+    signer_pair: &State<sp_core::sr25519::Pair>,
+    tx_sender: &State<UnboundedSender<Transaction>>,
 ) -> Result<status::Accepted<String>, Error> {
     let faucet_data = payload.clone().into_inner().faucet;
     let auth = BearerToken::new(twitter_bearer_token.token());
@@ -86,7 +134,7 @@ pub async fn faucet(
     let FaucetRequest {
         wallet_address,
         typed_chain_id,
-    } = faucet_data;
+    } = faucet_data.clone();
     println!(
         "Requesting faucet for (address {}, chain: {:?}",
         wallet_address, typed_chain_id
@@ -136,8 +184,7 @@ pub async fn faucet(
                 let next_token = followers.meta.clone().and_then(|m| m.next_token);
                 println!(
                     "Got {} followers, next token: {:?}",
-                    num_followers.to_string(),
-                    next_token
+                    num_followers, next_token
                 );
 
                 let webb_user_id = NumericId::new(WEBB_TWITTER_ACCOUNT_ID);
@@ -215,8 +262,27 @@ pub async fn faucet(
         wallet_address,
         typed_chain_id
     );
-    // TODO: Handle tx and return the hash
-    let tx_hash = "0x1234";
+
+    let mut tx_hash = None;
+    #[cfg(feature = "with-token-transfer")]
+    {
+        tx_hash = match handle_token_transfer(
+            faucet_data,
+            evm_providers,
+            substrate_providers,
+            evm_wallet,
+            signer_pair,
+            tx_sender,
+        )
+        .await
+        {
+            Ok(tx_hash) => Some(tx_hash),
+            Err(e) => {
+                println!("Error transferring tokens: {:?}", e);
+                None
+            }
+        };
+    }
     Ok(status::Accepted(Some(
         json!({
             "wallet": wallet_address,

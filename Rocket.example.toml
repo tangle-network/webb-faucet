@@ -1,5 +1,6 @@
 [default]
 db = "faucet"
+mnemonic="<mnemonic>"
 
 [global.oauth.twitter]
 provider = "twitter"

@@ -48,6 +48,17 @@ rustup update
 
 Great! Now your Rust environment is ready! 🚀🚀
 
+### Nix (with flakes)
+
+If you prefer [Nix](https://nixos.org), then follow these steps to get your environment setup:
+
+1. Install [Nix](https://nixos.org/download.html)
+2. Enable [flakes](https://nixos.wiki/wiki/Flakes) (if you haven't already)
+3. Run `nix develop` to enter a shell with all the dependencies installed
+
+Additionally, if you have [direnv](https://direnv.net/) installed, you can run `direnv allow` to automatically enter the shell whenever you enter the directory.
+
+
 ## Usage
 
 Starting the Rust serve requires you to create a `Rocket.toml` file specified with your Twitter Developer App's credentials. You can find the template in the `Rocket.example.toml` file. You will also need to create a new Twitter Application for development purposes. You can find the instructions [here](https://developer.twitter.com/en/docs/twitter-api/getting-started/getting-access-to-the-twitter-api).

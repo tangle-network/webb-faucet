@@ -5,3 +5,4 @@ Rocket.toml
 tls/*.pem
 node_modules
 .vscode
+.direnv

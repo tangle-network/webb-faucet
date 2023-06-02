@@ -1,6 +1,7 @@
 use chrono::{Days, Utc};
 
 use rocket::futures::{self, TryFutureExt};
+use rocket::http::Status;
 use rocket::tokio::sync::mpsc::UnboundedSender;
 use rocket::tokio::sync::oneshot;
 use rocket::{response::status, serde::json::Json, State};
@@ -130,7 +131,7 @@ pub async fn faucet(
     evm_wallet: &State<Wallet<SigningKey>>,
     signer_pair: &State<sp_core::sr25519::Pair>,
     tx_sender: &State<UnboundedSender<Transaction>>,
-) -> Result<status::Accepted<String>, Error> {
+) -> Result<status::Custom<String>, Error> {
     let faucet_data = payload.clone().into_inner().faucet;
     let auth = BearerToken::new(twitter_bearer_token.token());
     let twitter_api = TwitterApi::new(auth);
@@ -267,34 +268,41 @@ pub async fn faucet(
         typed_chain_id
     );
 
-    let mut tx_hash = None;
-    #[cfg(feature = "with-token-transfer")]
+    match handle_token_transfer(
+        faucet_data,
+        evm_providers,
+        substrate_providers,
+        evm_wallet,
+        signer_pair,
+        tx_sender,
+    )
+    .await
     {
-        tx_hash = match handle_token_transfer(
-            faucet_data,
-            evm_providers,
-            substrate_providers,
-            evm_wallet,
-            signer_pair,
-            tx_sender,
-        )
-        .await
-        {
-            Ok(tx_hash) => Some(tx_hash),
-            Err(e) => {
-                println!("Error transferring tokens: {:?}", e);
-                None
-            }
-        };
+        Ok(tx_hash) => Ok(status::Custom(
+            Status::Ok,
+            json!({
+                "wallet": wallet_address,
+                "typed_chain_id": typed_chain_id,
+                "last_claimed_date": now,
+                "user": twitter_user,
+                "tx_hash": tx_hash,
+            })
+            .to_string(),
+        )),
+        Err(e) => {
+            rocket::log::private::error!("Error transferring tokens: {e:?}");
+            Ok(status::Custom(
+                Status::InternalServerError,
+                json!({
+                    "error": "Error transferring tokens",
+                    "reason": format!("{e}"),
+                    "typed_chain_id": typed_chain_id,
+                    "wallet": wallet_address,
+                    "user": twitter_user,
+                    "last_claimed_date": now,
+                })
+                .to_string(),
+            ))
+        }
     }
-    Ok(status::Accepted(Some(
-        json!({
-            "wallet": wallet_address,
-            "typed_chain_id": typed_chain_id,
-            "last_claimed_date": now,
-            "user": twitter_user,
-            "tx_hash": tx_hash
-        })
-        .to_string(),
-    )))
 }

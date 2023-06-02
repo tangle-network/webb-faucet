@@ -3,7 +3,6 @@ use std::sync::Arc;
 use ethers::prelude::ContractCall;
 use ethers::providers::Middleware;
 use ethers::types::{Address, TransactionReceipt, TransactionRequest};
-use rocket::tokio::sync::Mutex;
 use rocket::tokio::{self, sync::oneshot};
 use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -19,20 +18,18 @@ use crate::error::Error;
 use super::types::{Transaction, TxResult};
 
 pub struct TransactionProcessingSystem {
-    rx_receiver: Arc<Mutex<UnboundedReceiver<Transaction>>>,
+    rx_receiver: UnboundedReceiver<Transaction>,
 }
 
 impl TransactionProcessingSystem {
     pub fn new(rx_receiver: UnboundedReceiver<Transaction>) -> Self {
-        Self {
-            rx_receiver: Arc::new(Mutex::new(rx_receiver)),
-        }
+        Self { rx_receiver }
     }
 
-    pub fn run(&self) {
-        let receiver = Arc::clone(&self.rx_receiver);
+    pub fn run(mut self) {
         tokio::spawn(async move {
-            while let Some(transaction) = receiver.lock().await.recv().await {
+            println!("Transaction processing system started");
+            while let Some(transaction) = self.rx_receiver.recv().await {
                 match transaction {
                     Transaction::Evm {
                         provider,
@@ -41,8 +38,11 @@ impl TransactionProcessingSystem {
                         token_address,
                         result_sender,
                     } => {
-                        let _ =
+                        let res =
                             handle_evm_tx(provider, to, amount, token_address, result_sender).await;
+                        if let Err(e) = res {
+                            eprintln!("Error processing EVM transaction: {e}");
+                        }
                     }
                     Transaction::Substrate {
                         api,
@@ -52,12 +52,16 @@ impl TransactionProcessingSystem {
                         signer,
                         result_sender,
                     } => {
-                        let _ =
+                        let res =
                             handle_substrate_tx(api, to, amount, asset_id, signer, result_sender)
                                 .await;
+                        if let Err(e) = res {
+                            eprintln!("Error processing Substrate transaction: {e}");
+                        }
                     }
                 }
             }
+            eprintln!("Transaction processing system stopped");
         });
     }
 }

@@ -218,8 +218,7 @@ async fn rocket() -> _ {
     let (tx_sender, rx_receiver) = mpsc::unbounded_channel();
 
     // Pass the receiver to your transaction processing system
-    let tx_processing_system = TransactionProcessingSystem::new(rx_receiver);
-    tx_processing_system.run();
+    TransactionProcessingSystem::new(rx_receiver).run();
 
     rocket::build()
         .attach(AdHoc::config::<AppConfig>())

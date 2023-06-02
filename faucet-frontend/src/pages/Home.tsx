@@ -7,7 +7,6 @@ import ClaimFundsForm from "../components/ClaimFundsForm";
 const postData = async (code: string) => {
   const client_id = process.env.REACT_APP_TWITTER_CLIENT_ID || "";
   const publicUrl = process.env.PUBLIC_URL || "http://localhost:3000";
-  console.log("publicUrl", publicUrl);
   const response = await axios.post(
     // This will be proxied to https:
     // "https://api.twitter.com/2/oauth2/token"

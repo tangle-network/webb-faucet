@@ -11,7 +11,7 @@ type SubstrateChain = { Substrate: number };
 type Chain = EvmChain | SubstrateChain;
 
 const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
-  const [chain, setChain] = useState<Chain>({ Evm: 5 });
+  const [chain, setChain] = useState<Chain>({ Evm: 5001 });
   const [address, setAddress] = useState<string>("");
 
   const claimFunds = async () => {
@@ -83,9 +83,12 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
         value={JSON.stringify(chain)}
         onChange={(event) => setChain(JSON.parse(event.target.value) as Chain)}
       >
+        <option value={JSON.stringify({ Evm: 5001 })}>Athena</option>
+        <option value={JSON.stringify({ Evm: 5002 })}>Hermes</option>
+        <option value={JSON.stringify({ Evm: 5003 })}>Demeter</option>
+        <option value={JSON.stringify({ Substrate: 1081 })}>Tangle Standalone</option>
         <option value={JSON.stringify({ Evm: 5 })}>Gorli</option>
         <option value={JSON.stringify({ Evm: 80001 })}>Mumbai</option>
-        <option value={JSON.stringify({ Substrate: 1080 })}>Tangle Standalone</option>
       </select>
 
       <label htmlFor="address">Address:</label>

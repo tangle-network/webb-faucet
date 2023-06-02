@@ -57,10 +57,7 @@ pub struct AppConfig {
 fn auth_db_firing() -> impl Fairing {
     AdHoc::try_on_ignite("Open Auth database", |rocket| async {
         let maybe_db = match rocket.state::<AppConfig>() {
-            Some(config) => {
-                rocket::log::private::info!(">> Opening database at '{}'", config.db.display());
-                SledAuthDb::open(&config.db)
-            }
+            Some(config) => SledAuthDb::open(&config.db),
             None => return Err(rocket),
         };
         match maybe_db {

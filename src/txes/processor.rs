@@ -127,6 +127,8 @@ async fn handle_evm_token_tx<M: Middleware>(
     token_address: Address,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<TransactionReceipt, Error> {
+    let has_signer = provider.is_signer().await;
+    assert!(has_signer, "Provider must have signer");
     let contract = ERC20PresetMinterPauserContract::new(token_address, Arc::new(provider));
 
     // Fetch the decimals used by the contract so we can compute the decimal amount to send.
@@ -134,13 +136,19 @@ async fn handle_evm_token_tx<M: Middleware>(
         .decimals()
         .call()
         .await
-        .map_err(|e| Error::Custom(e.to_string()))?;
+        .map_err(|e| Error::Custom(format!("Failed to fetch decimals: {:?}", e)))?;
     let decimal_amount = amount * U256::exp10(decimals as usize);
 
     // Transfer the desired amount of tokens to the `to_address`
-    let tx: ContractCall<M, _> = contract.transfer(to, decimal_amount);
-    let pending_tx = tx.send().await.map_err(|e| Error::Custom(e.to_string()))?;
-    match pending_tx.await.map_err(|e| Error::Custom(e.to_string()))? {
+    let tx: ContractCall<M, _> = contract.transfer(to, decimal_amount).legacy();
+    let pending_tx = tx
+        .send()
+        .await
+        .map_err(|e| Error::Custom(format!("Failed to send tx: {:?}", e)))?;
+    match pending_tx
+        .await
+        .map_err(|e| Error::Custom(format!("Failed to await tx: {:?}", e)))?
+    {
         Some(receipt) => {
             result_sender
                 .send(Ok(TxResult::Evm(receipt.clone())))

@@ -33,6 +33,7 @@
             (lib.optionals pkgs.stdenv.isLinux pkgs.mold)
           ];
           buildInputs = [
+            pkgs.openssl
             # We want the unwrapped version, wrapped comes with nixpkgs' toolchain
             pkgs.rust-analyzer-unwrapped
             # Nodejs for test suite
@@ -47,7 +48,7 @@
           # Environment variables
           RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
           # Needed for running DKG/Tangle locally
-          LD_LIBRARY_PATH = "${pkgs.gmp}/lib";
+          LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.openssl pkgs.gmp ];
         };
       });
 }

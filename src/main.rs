@@ -132,7 +132,7 @@ fn ethers_providers_firing() -> impl Fairing {
                                 GasEscalatorMiddleware::new(p, escalator, Frequency::PerBlock)
                             })
                             .gas_oracle(gas_oracle)
-                            .with_signer(wallet.clone())
+                            .with_signer(wallet.clone().with_chain_id(chain_id))
                             .nonce_manager(address);
                         (chain_id, provider)
                     })

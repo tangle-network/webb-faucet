@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+use std::sync::Arc;
 use std::{collections::HashMap, path::PathBuf};
 
 use error::Error;
@@ -22,12 +23,12 @@ use txes::{
     processor::TransactionProcessingSystem,
     types::{EvmProviders, SubstrateProviders},
 };
+use webb::evm::ethers;
 use webb::{
     evm::ethers::{
         prelude::{
             gas_escalator::{Frequency, GasEscalatorMiddleware, GeometricGasPrice},
             gas_oracle::GasNow,
-            NonceManagerMiddleware,
         },
         providers::{Http, Provider},
         signers::{coins_bip39::English, MnemonicBuilder},
@@ -57,7 +58,7 @@ fn auth_db_firing() -> impl Fairing {
     AdHoc::try_on_ignite("Open Auth database", |rocket| async {
         let maybe_db = match rocket.state::<AppConfig>() {
             Some(config) => {
-                println!("Opening database at {}", config.db.display());
+                rocket::log::private::info!(">> Opening database at '{}'", config.db.display());
                 SledAuthDb::open(&config.db)
             }
             None => return Err(rocket),
@@ -73,7 +74,7 @@ fn ethers_wallet_firing() -> impl Fairing {
     AdHoc::try_on_ignite("Open ethers-rs wallet", |rocket| async {
         let maybe_wallet = match rocket.state::<AppConfig>() {
             Some(config) => {
-                let mnemonic: String = config.mnemonic.parse().unwrap();
+                let mnemonic: String = config.mnemonic.parse().expect("Mnemonic is not valid");
                 MnemonicBuilder::<English>::default()
                     .phrase(PathOrString::String(mnemonic))
                     .build()
@@ -92,7 +93,7 @@ fn substrate_wallet_firing() -> impl Fairing {
     AdHoc::try_on_ignite("Open substrate wallet", |rocket| async {
         let maybe_wallet = match rocket.state::<AppConfig>() {
             Some(config) => {
-                let mnemonic: String = config.mnemonic.parse().unwrap();
+                let mnemonic: String = config.mnemonic.parse().expect("Mnemonic is not valid");
                 sp_core::sr25519::Pair::from_string(&mnemonic, None)
             }
             None => return Err(rocket),
@@ -106,8 +107,8 @@ fn substrate_wallet_firing() -> impl Fairing {
 }
 
 fn ethers_providers_firing() -> impl Fairing {
-    AdHoc::try_on_ignite("Open provider", |rocket| async {
-        let result: Result<HashMap<u64, NonceManagerMiddleware<_>>, Error> =
+    AdHoc::try_on_ignite("Open ethers provider", |rocket| async {
+        let result: Result<HashMap<u64, _>, Error> =
             match rocket.state::<AppConfig>() {
                 Some(config) => {
                     let networks = vec![Network::Athena, Network::Hermes, Network::Demeter];
@@ -143,7 +144,7 @@ fn ethers_providers_firing() -> impl Fairing {
 
                     let mut provider_map: HashMap<u64, _> = HashMap::new();
                     for (chain_id, provider) in providers {
-                        provider_map.insert(chain_id, provider);
+                        provider_map.insert(chain_id, Arc::new(provider));
                     }
                     Ok(provider_map)
                 }
@@ -160,7 +161,7 @@ fn ethers_providers_firing() -> impl Fairing {
 }
 
 fn substrate_providers_firing() -> impl Fairing {
-    AdHoc::try_on_ignite("Open provider", |rocket| async {
+    AdHoc::try_on_ignite("Open subxt providers", |rocket| async {
         let result: Result<HashMap<u64, OnlineClient<PolkadotConfig>>, Error> = match rocket
             .state::<AppConfig>(
         ) {

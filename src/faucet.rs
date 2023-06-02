@@ -10,7 +10,6 @@ use serde_json::json;
 use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
 
 use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
-use webb::evm::ethers::providers::{Http, Provider};
 use webb::evm::ethers::signers::Wallet;
 use webb::substrate::subxt::OnlineClient;
 use webb::substrate::subxt::PolkadotConfig;
@@ -21,7 +20,7 @@ use crate::auth;
 use crate::error::Error;
 use crate::helpers::address::MultiAddress;
 use crate::helpers::files::get_evm_token_address;
-use crate::txes::types::{EvmProviders, SubstrateProviders, Transaction, TxResult};
+use crate::txes::types::{EthersClient, EvmProviders, SubstrateProviders, Transaction, TxResult};
 
 pub const FAUCET_REQUEST_AMOUNT: u64 = 100;
 pub const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
@@ -43,7 +42,7 @@ pub struct FaucetRequest {
 
 pub async fn handle_token_transfer(
     faucet_req: FaucetRequest,
-    evm_providers: &State<EvmProviders<Provider<Http>>>,
+    evm_providers: &State<EvmProviders<EthersClient>>,
     substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
     _evm_wallet: &State<Wallet<SigningKey>>,
     signer_pair: &State<sp_core::sr25519::Pair>,
@@ -65,13 +64,15 @@ pub async fn handle_token_transfer(
             let dest = *faucet_req.wallet_address.ethereum().unwrap();
 
             // Send transaction to the processor.
-            tx_sender.send(Transaction::Evm {
-                provider,
-                to: dest,
-                amount: FAUCET_REQUEST_AMOUNT.into(),
-                token_address: Some(token_address.into()),
-                result_sender,
-            });
+            tx_sender
+                .send(Transaction::Evm {
+                    provider,
+                    to: dest,
+                    amount: FAUCET_REQUEST_AMOUNT.into(),
+                    token_address: Some(token_address.into()),
+                    result_sender,
+                })
+                .expect("Failed to send transaction to processor");
         }
         webb_proposals::TypedChainId::Substrate(chain_id) => {
             // 1. Create a provider for the chain id.
@@ -86,14 +87,16 @@ pub async fn handle_token_transfer(
 
             // 2. Build a balance transfer extrinsic.
             let dest = faucet_req.wallet_address.substrate().unwrap().clone();
-            tx_sender.send(Transaction::Substrate {
-                api,
-                to: dest,
-                amount: FAUCET_REQUEST_AMOUNT.into(),
-                asset_id: None,
-                signer: signer_pair.inner().clone(),
-                result_sender,
-            });
+            tx_sender
+                .send(Transaction::Substrate {
+                    api,
+                    to: dest,
+                    amount: FAUCET_REQUEST_AMOUNT.into(),
+                    asset_id: None,
+                    signer: signer_pair.inner().clone(),
+                    result_sender,
+                })
+                .expect("Failed to send transaction to processor");
         }
         _ => return Err(Error::Custom("Invalid chain id".to_string())),
     };
@@ -117,11 +120,12 @@ pub async fn handle_token_transfer(
 }
 
 #[post("/faucet", data = "<payload>")]
+#[allow(clippy::too_many_arguments)]
 pub async fn faucet(
     twitter_bearer_token: auth::TwitterBearerToken<'_>,
     payload: Json<Payload>,
     auth_db: &State<SledAuthDb>,
-    evm_providers: &State<EvmProviders<Provider<Http>>>,
+    evm_providers: &State<EvmProviders<EthersClient>>,
     substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
     evm_wallet: &State<Wallet<SigningKey>>,
     signer_pair: &State<sp_core::sr25519::Pair>,

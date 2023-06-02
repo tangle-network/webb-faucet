@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
-use ethers::prelude::{abigen, ContractCall};
+use ethers::prelude::ContractCall;
 use ethers::providers::Middleware;
 use ethers::types::{Address, TransactionReceipt, TransactionRequest};
 use rocket::tokio::sync::Mutex;
 use rocket::tokio::{self, sync::oneshot};
 use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
+use webb::evm::contract::protocol_solidity::ERC20PresetMinterPauserContract;
+use webb::evm::ethers;
 use webb::evm::ethers::types::U256;
 use webb::substrate::subxt::utils::{AccountId32, MultiAddress};
 use webb::substrate::subxt::{tx::PairSigner, OnlineClient, PolkadotConfig};
@@ -67,17 +69,6 @@ async fn handle_evm_tx<M: Middleware>(
     token_address: Option<Address>,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<TransactionReceipt, Error> {
-    abigen!(
-        ERC20Contract,
-        r#"[
-            function balanceOf(address account) external view returns (uint256)
-            function decimals() external view returns (uint8)
-            function symbol() external view returns (string memory)
-            function transfer(address to, uint256 amount) external returns (bool)
-            event Transfer(address indexed from, address indexed to, uint256 value)
-        ]"#,
-    );
-
     match token_address {
         Some(token_address) => {
             handle_evm_token_tx(provider, to, amount, token_address, result_sender).await
@@ -132,18 +123,7 @@ async fn handle_evm_token_tx<M: Middleware>(
     token_address: Address,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<TransactionReceipt, Error> {
-    abigen!(
-        ERC20Contract,
-        r#"[
-            function balanceOf(address account) external view returns (uint256)
-            function decimals() external view returns (uint8)
-            function symbol() external view returns (string memory)
-            function transfer(address to, uint256 amount) external returns (bool)
-            event Transfer(address indexed from, address indexed to, uint256 value)
-        ]"#
-    );
-
-    let contract = ERC20Contract::new(token_address, Arc::new(provider));
+    let contract = ERC20PresetMinterPauserContract::new(token_address, Arc::new(provider));
 
     // Fetch the decimals used by the contract so we can compute the decimal amount to send.
     let decimals = contract

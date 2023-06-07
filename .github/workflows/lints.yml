@@ -1,0 +1,57 @@
+name: Lints
+on:
+  pull_request:
+    branches:
+      - main
+
+env:
+  DEV_PACKAGES: build-essential musl musl-dev musl-tools libssl-dev pkg-config
+
+jobs:
+  clippy:
+    name: Clippy
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-clippy
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: install system build dependencies
+        run: sudo apt-get update && sudo apt-get install ${DEV_PACKAGES}
+
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust"
+          cache-directories: ".dvc/tmp\n.dvc/cache"
+
+      - name: Install stable toolchain with clippy available
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy
+      - name: Run cargo clippy
+        run: ./ci/clippy.sh
+        continue-on-error: false
+
+  rustfmt:
+    name: Format
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-rustfmt
+      cancel-in-progress: true
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain with rustfmt available
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+        continue-on-error: false

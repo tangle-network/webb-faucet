@@ -33,7 +33,11 @@ impl SledAuthDb {
 impl AuthDb for SledAuthDb {
     type Error = Error;
 
-    async fn put_user_info(&self, id: u64, value: &UserInfo) -> Result<(), Self::Error> {
+    async fn put_user_info(
+        &self,
+        id: u64,
+        value: &UserInfo,
+    ) -> Result<(), Self::Error> {
         let id = u64_to_i64(id)?;
         let user_info_tree = self.db.open_tree("users")?;
         let user_info_bytes = serde_json::to_vec(value)?;
@@ -41,7 +45,10 @@ impl AuthDb for SledAuthDb {
         Ok(())
     }
 
-    async fn get_user_info(&self, id: u64) -> Result<Option<UserInfo>, Self::Error> {
+    async fn get_user_info(
+        &self,
+        id: u64,
+    ) -> Result<Option<UserInfo>, Self::Error> {
         let id = u64_to_i64(id)?;
         let user_info_tree = self.db.open_tree("users")?;
         user_info_tree

@@ -8,7 +8,9 @@ use rocket::{response::status, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::json;
 
-use twitter_v2::{authorization::BearerToken, id::NumericId, query::UserField, TwitterApi};
+use twitter_v2::{
+    authorization::BearerToken, id::NumericId, query::UserField, TwitterApi,
+};
 
 use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
 use webb::evm::ethers::signers::Wallet;
@@ -21,7 +23,9 @@ use crate::auth;
 use crate::error::Error;
 use crate::helpers::address::MultiAddress;
 use crate::helpers::files::get_evm_token_address;
-use crate::txes::types::{EthersClient, EvmProviders, SubstrateProviders, Transaction, TxResult};
+use crate::txes::types::{
+    EthersClient, EvmProviders, SubstrateProviders, Transaction, TxResult,
+};
 
 pub const FAUCET_REQUEST_AMOUNT: u64 = 20;
 pub const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
@@ -44,7 +48,9 @@ pub struct FaucetRequest {
 pub async fn handle_token_transfer(
     faucet_req: FaucetRequest,
     evm_providers: &State<EvmProviders<EthersClient>>,
-    substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
+    substrate_providers: &State<
+        SubstrateProviders<OnlineClient<PolkadotConfig>>,
+    >,
     _evm_wallet: &State<Wallet<SigningKey>>,
     signer_pair: &State<sp_core::sr25519::Pair>,
     tx_sender: &State<UnboundedSender<Transaction>>,
@@ -106,7 +112,7 @@ pub async fn handle_token_transfer(
     let result = match result_receiver.await {
         Ok(res) => match res {
             Ok(tx_result) => tx_result, // if transaction execution was successful
-            Err(e) => return Err(e),    // if transaction execution resulted in an error
+            Err(e) => return Err(e), // if transaction execution resulted in an error
         },
         Err(e) => {
             return Err(Error::Custom(format!(
@@ -127,7 +133,9 @@ pub async fn faucet(
     payload: Json<Payload>,
     auth_db: &State<SledAuthDb>,
     evm_providers: &State<EvmProviders<EthersClient>>,
-    substrate_providers: &State<SubstrateProviders<OnlineClient<PolkadotConfig>>>,
+    substrate_providers: &State<
+        SubstrateProviders<OnlineClient<PolkadotConfig>>,
+    >,
     evm_wallet: &State<Wallet<SigningKey>>,
     signer_pair: &State<sp_core::sr25519::Pair>,
     tx_sender: &State<UnboundedSender<Transaction>>,
@@ -152,7 +160,11 @@ pub async fn faucet(
             let res = res
                 .data()
                 .cloned()
-                .ok_or_else(|| twitter_v2::error::Error::Custom("No user found".to_string()))
+                .ok_or_else(|| {
+                    twitter_v2::error::Error::Custom(
+                        "No user found".to_string(),
+                    )
+                })
                 .map_err(Into::into);
             futures::future::ready(res)
         })
@@ -165,11 +177,14 @@ pub async fn faucet(
     let mut is_first_page = true;
 
     // Check if the user is following the webb twitter account
-    while is_first_page || !is_following_webb && maybe_pagination_token.is_some() {
+    while is_first_page
+        || !is_following_webb && maybe_pagination_token.is_some()
+    {
         // Check if the user is following the webb twitter account
         // - the account username is `webbprotocol`
         // - the user id is `1355009685859033092`
-        let mut get_my_following_req = twitter_api.with_user_ctx().await?.get_my_following();
+        let mut get_my_following_req =
+            twitter_api.with_user_ctx().await?.get_my_following();
 
         let mut req = get_my_following_req
             .user_fields([UserField::Id])
@@ -185,8 +200,10 @@ pub async fn faucet(
         let (is_following_webb_, maybe_pagination_token_) = match my_followers {
             Ok(followers) => {
                 // Get number of followers
-                let num_followers = followers.data.as_ref().map(Vec::len).unwrap_or_default();
-                let next_token = followers.meta.clone().and_then(|m| m.next_token);
+                let num_followers =
+                    followers.data.as_ref().map(Vec::len).unwrap_or_default();
+                let next_token =
+                    followers.meta.clone().and_then(|m| m.next_token);
                 println!(
                     "Got {} followers, next token: {:?}",
                     num_followers, next_token
@@ -197,7 +214,9 @@ pub async fn faucet(
                     followers
                         .data
                         .clone()
-                        .map(|u| u.iter().any(|follower| follower.id == webb_user_id))
+                        .map(|u| {
+                            u.iter().any(|follower| follower.id == webb_user_id)
+                        })
                         .unwrap_or(false),
                     next_token,
                 )

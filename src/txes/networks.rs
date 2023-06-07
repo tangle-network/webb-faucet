@@ -85,8 +85,12 @@ impl Network {
 
     pub fn from_typed_chain_id(typed_chain_id: TypedChainId) -> Option<Self> {
         match typed_chain_id {
-            TypedChainId::Evm(chain_id) => Self::from_evm_chain_id(chain_id.into()),
-            TypedChainId::Substrate(chain_id) => Self::from_substrate_chain_id(chain_id.into()),
+            TypedChainId::Evm(chain_id) => {
+                Self::from_evm_chain_id(chain_id.into())
+            }
+            TypedChainId::Substrate(chain_id) => {
+                Self::from_substrate_chain_id(chain_id.into())
+            }
             _ => None,
         }
     }

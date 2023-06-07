@@ -7,7 +7,10 @@ use crate::auth::providers::Twitter;
 use crate::error::Error;
 
 #[get("/login/twitter")]
-pub async fn twitter(oauth2: OAuth2<Twitter>, cookies: &CookieJar<'_>) -> Result<Redirect, Error> {
+pub async fn twitter(
+    oauth2: OAuth2<Twitter>,
+    cookies: &CookieJar<'_>,
+) -> Result<Redirect, Error> {
     Ok(oauth2.get_redirect(
         cookies,
         &[

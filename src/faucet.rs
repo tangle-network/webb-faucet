@@ -185,7 +185,7 @@ pub async fn faucet(
         let (is_following_webb_, maybe_pagination_token_) = match my_followers {
             Ok(followers) => {
                 // Get number of followers
-                let num_followers = followers.data.as_ref().map(|u| u.len()).unwrap_or_default();
+                let num_followers = followers.data.as_ref().map(Vec::len).unwrap_or_default();
                 let next_token = followers.meta.clone().and_then(|m| m.next_token);
                 println!(
                     "Got {} followers, next token: {:?}",

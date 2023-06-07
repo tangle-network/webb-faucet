@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+env:
+  DEV_PACKAGES: build-essential musl musl-dev musl-tools pkg-config libssl-dev librust-openssl-sys-dev libc6 clang
+
+jobs:
+  linux-check:
+    name: Linux Check
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-linux-check-${{ matrix.target }}
+      cancel-in-progress: true
+    steps:
+      - name: install system build dependencies
+        run: sudo apt-get update && sudo apt-get install ${DEV_PACKAGES}
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 50
+
+      - name: Setup | Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        run: cargo install cross --locked
+
+      - name: Build Checking on ${{ matrix.target }} using cross
+        run: cross check --target=${{ matrix.target }} --features native-tls/vendored --locked
+      - name: Build on ${{ matrix.target }} using cross
+        run: cross build --target=${{ matrix.target }} --features native-tls/vendored --locked
+
+    strategy:
+      fail-fast: true
+      matrix:
+        target:
+          - aarch64-unknown-linux-musl
+          - x86_64-unknown-linux-musl

@@ -13,7 +13,7 @@ use rocket::{
     futures::{stream::FuturesUnordered, StreamExt},
     http::Method,
 };
-use rocket::{launch, routes};
+use rocket::{launch, routes, log};
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use rocket_oauth2::OAuth2;
 use serde::Deserialize;
@@ -119,6 +119,7 @@ fn ethers_providers_firing() -> impl Fairing {
                 };
 
                 let address = wallet.address();
+                log::private::info!("Using Account {address:?}");
                 let providers: Vec<(_, _)> = networks
                     .iter()
                     .map(|net| net.to_evm_chain_id().unwrap())

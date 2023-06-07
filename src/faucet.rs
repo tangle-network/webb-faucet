@@ -23,7 +23,7 @@ use crate::helpers::address::MultiAddress;
 use crate::helpers::files::get_evm_token_address;
 use crate::txes::types::{EthersClient, EvmProviders, SubstrateProviders, Transaction, TxResult};
 
-pub const FAUCET_REQUEST_AMOUNT: u64 = 100;
+pub const FAUCET_REQUEST_AMOUNT: u64 = 20;
 pub const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -235,12 +235,21 @@ pub async fn faucet(
         if let Some(last_claim_date) = last_claim_date {
             if last_claim_date <= now.checked_add_days(Days::new(1)).unwrap() {
                 println!(
-                    "{:?}  User {:?} tried to claim again before 24 hours",
+                    "{:?} User {:?} tried to claim again before 24 hours",
                     Utc::now().to_rfc3339(),
                     twitter_user.username
                 );
-                return Err(Error::Custom(
-                    "You can only claim once every 24 hours.".to_string(),
+                return Ok(status::Custom(
+                    Status::UnprocessableEntity,
+                    json!({
+                        "error": "Error transferring tokens",
+                        "reason": "You can only claim once every 24 hours",
+                        "wallet": wallet_address,
+                        "typed_chain_id": typed_chain_id,
+                        "last_claimed_date": last_claim_date,
+                        "user": twitter_user,
+                    })
+                    .to_string(),
                 ));
             }
         }

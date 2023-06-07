@@ -48,7 +48,7 @@ pub fn get_evm_rpc_url(chain_id: u64) -> String {
 
 pub fn get_substrate_rpc_url(_chain_id: u64) -> String {
     // TODO: Decide if we want to push this into config
-    let url = "ws://127.0.0.1:9944";
+    let url = "wss://tangle-standalone-archive.webb.tools:443";
     url.to_string()
 }
 

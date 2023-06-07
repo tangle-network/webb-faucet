@@ -45,9 +45,9 @@ impl Network {
             534353 => Some(Self::ScrollAlpha),
             1287 => Some(Self::MoonbaseAlpha),
             43113 => Some(Self::AvalancheFuji),
-            5001 => Some(Self::Hermes),
-            5002 => Some(Self::Athena),
-            5003 => Some(Self::Demeter),
+            3884533461 => Some(Self::Athena),
+            3884533462 => Some(Self::Hermes),
+            3884533463 => Some(Self::Demeter),
             _ => None,
         }
     }
@@ -62,9 +62,9 @@ impl Network {
             Self::ScrollAlpha => Some(534353),
             Self::MoonbaseAlpha => Some(1287),
             Self::AvalancheFuji => Some(43113),
-            Self::Hermes => Some(5001),
-            Self::Athena => Some(5002),
-            Self::Demeter => Some(5003),
+            Self::Athena => Some(3884533461),
+            Self::Hermes => Some(3884533462),
+            Self::Demeter => Some(3884533463),
             _ => None,
         }
     }
@@ -95,17 +95,16 @@ impl Network {
         match self {
             Self::Tangle => Some(TypedChainId::Substrate(1081)),
             Self::ArbitrumGoerli => Some(TypedChainId::Evm(421613)),
-            Self::Athena => Some(TypedChainId::Evm(5002)),
-            Self::Demeter => Some(TypedChainId::Evm(5003)),
+            Self::Athena => Some(TypedChainId::Evm(3884533461)),
+            Self::Demeter => Some(TypedChainId::Evm(3884533463)),
             Self::Goerli => Some(TypedChainId::Evm(5)),
-            Self::Hermes => Some(TypedChainId::Evm(5001)),
+            Self::Hermes => Some(TypedChainId::Evm(3884533462)),
             Self::MoonbaseAlpha => Some(TypedChainId::Evm(1287)),
             Self::OptimismGoerli => Some(TypedChainId::Evm(420)),
             Self::PolygonMumbai => Some(TypedChainId::Evm(80001)),
             Self::ScrollAlpha => Some(TypedChainId::Evm(534353)),
             Self::Sepolia => Some(TypedChainId::Evm(11155111)),
             Self::AvalancheFuji => Some(TypedChainId::Evm(43113)),
-            _ => None,
         }
     }
 }

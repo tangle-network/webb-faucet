@@ -47,13 +47,13 @@
     "https://sepolia.infura.io/v3/",
     "https://eth-sepolia.g.alchemy.com/v2/"
   ],
-  "5001": [
+  "3884533461": [
     "https://athena-testnet.webb.tools"
   ],
-  "5002": [
+  "3884533462": [
     "https://hermes-testnet.webb.tools"
   ],
-  "5003": [
+  "3884533463": [
     "https://demeter-testnet.webb.tools"
   ]
 }

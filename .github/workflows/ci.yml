@@ -34,9 +34,9 @@ jobs:
         run: cargo install cross --locked
 
       - name: Build Checking on ${{ matrix.target }} using cross
-        run: cross check --target=${{ matrix.target }} --features native-tls/vendored --locked
+        run: cross check --target=${{ matrix.target }} --locked
       - name: Build on ${{ matrix.target }} using cross
-        run: cross build --target=${{ matrix.target }} --features native-tls/vendored --locked
+        run: cross build --target=${{ matrix.target }} --locked
 
     strategy:
       fail-fast: true

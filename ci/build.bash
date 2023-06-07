@@ -28,6 +28,6 @@ if [ -z "$RELEASE_DOCKER" ]; then
     true
 else
     # build for docker
-    $CROSS build -p webb-faucet --target "$TARGET_TRIPLE" --release
+    $CROSS build -p webb-faucet --target "$TARGET_TRIPLE" --locked --release
     mkdir -p build && cp target/"$TARGET_TRIPLE"/release/webb-faucet build/webb-faucet
 fi

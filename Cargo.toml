@@ -24,7 +24,7 @@ serde_json = "1.0"
 sled = "0.34.7"
 sp-core = { version = "16.0.0" }
 thiserror = "1.0"
-twitter-v2 = "0.1.8"
+twitter-v2 = { version = "0.1.8", default-features = false, features = ["oauth2", "rustls-tls"] }
 
 webb-auth-sled = { path = "./auth-sled" }
 webb-auth = { path = "./auth" }

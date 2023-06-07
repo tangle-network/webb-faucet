@@ -14,4 +14,4 @@ webb-auth = { path = "../auth" }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 thiserror = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-webb-proposals = { git = "https://github.com/webb-tools/webb-rs.git" }
+webb-proposals = "0.5.4"

@@ -41,17 +41,25 @@ pub enum TwitterBearerTokenError {
 impl<'r> FromRequest<'r> for TwitterBearerToken<'r> {
     type Error = TwitterBearerTokenError;
 
-    async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, Self::Error> {
+    async fn from_request(
+        request: &'r rocket::Request<'_>,
+    ) -> Outcome<Self, Self::Error> {
         let maybe_token = match request.headers().get_one("Authorization") {
             Some(token) => token.trim(),
             None => {
-                return Outcome::Failure((Status::Unauthorized, TwitterBearerTokenError::Missing))
+                return Outcome::Failure((
+                    Status::Unauthorized,
+                    TwitterBearerTokenError::Missing,
+                ))
             }
         };
         let token = match maybe_token.strip_prefix("Bearer ") {
             Some(token) => token,
             None => {
-                return Outcome::Failure((Status::Unauthorized, TwitterBearerTokenError::Malformed))
+                return Outcome::Failure((
+                    Status::Unauthorized,
+                    TwitterBearerTokenError::Malformed,
+                ))
             }
         };
         Outcome::Success(TwitterBearerToken(token))

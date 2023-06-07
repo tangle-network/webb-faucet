@@ -10,7 +10,9 @@ use ethers::{
 use rocket::tokio::sync::oneshot;
 use serde::{Deserialize, Serialize};
 use webb::evm::ethers;
-use webb::substrate::subxt::{utils::AccountId32, OnlineClient, PolkadotConfig};
+use webb::substrate::subxt::{
+    utils::AccountId32, OnlineClient, PolkadotConfig,
+};
 
 use crate::error::Error;
 

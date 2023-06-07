@@ -1,7 +1,15 @@
 use chrono::{DateTime, Utc};
 
 #[derive(
-    Copy, Clone, Debug, Eq, Hash, PartialEq, Default, serde::Serialize, serde::Deserialize,
+    Copy,
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[serde(tag = "type", content = "value")]
 pub enum UniversalWalletAddress {
@@ -49,7 +57,9 @@ impl UniversalWalletAddress {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize,
+)]
 #[serde(tag = "type", content = "value")]
 pub enum UserInfo {
     Twitter {
@@ -79,7 +89,9 @@ impl UserInfo {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize,
+)]
 pub struct ClaimsData {
     pub identity: u64,
     pub address: UniversalWalletAddress,

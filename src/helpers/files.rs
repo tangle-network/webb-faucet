@@ -8,7 +8,8 @@ fn convert_hex_to_bytes(hex_string: &str) -> Result<[u8; 20], &'static str> {
     let stripped = hex_string.strip_prefix("0x").unwrap_or(hex_string);
 
     // Convert hex to bytes
-    let vec = hex::decode(stripped).map_err(|_| "Failed to decode hex string")?;
+    let vec =
+        hex::decode(stripped).map_err(|_| "Failed to decode hex string")?;
 
     // Ensure the byte array is the correct length
     if vec.len() != 20 {
@@ -26,7 +27,8 @@ macro_rules! read_json {
     ($file:expr, $type:ty) => {{
         let file = File::open($file).expect("file should open read only");
         let reader = BufReader::new(file);
-        let map: $type = serde_json::from_reader(reader).expect("JSON was not well-formatted");
+        let map: $type = serde_json::from_reader(reader)
+            .expect("JSON was not well-formatted");
         map
     }};
 }

@@ -38,8 +38,14 @@ impl TransactionProcessingSystem {
                         token_address,
                         result_sender,
                     } => {
-                        let res =
-                            handle_evm_tx(provider, to, amount, token_address, result_sender).await;
+                        let res = handle_evm_tx(
+                            provider,
+                            to,
+                            amount,
+                            token_address,
+                            result_sender,
+                        )
+                        .await;
                         if let Err(e) = res {
                             eprintln!("Error processing EVM transaction: {e}");
                         }
@@ -52,11 +58,19 @@ impl TransactionProcessingSystem {
                         signer,
                         result_sender,
                     } => {
-                        let res =
-                            handle_substrate_tx(api, to, amount, asset_id, signer, result_sender)
-                                .await;
+                        let res = handle_substrate_tx(
+                            api,
+                            to,
+                            amount,
+                            asset_id,
+                            signer,
+                            result_sender,
+                        )
+                        .await;
                         if let Err(e) = res {
-                            eprintln!("Error processing Substrate transaction: {e}");
+                            eprintln!(
+                                "Error processing Substrate transaction: {e}"
+                            );
                         }
                     }
                 }
@@ -75,7 +89,14 @@ async fn handle_evm_tx<M: Middleware>(
 ) -> Result<TransactionReceipt, Error> {
     match token_address {
         Some(token_address) => {
-            handle_evm_token_tx(provider, to, amount, token_address, result_sender).await
+            handle_evm_token_tx(
+                provider,
+                to,
+                amount,
+                token_address,
+                result_sender,
+            )
+            .await
         }
         None => handle_evm_native_tx(provider, to, amount, result_sender).await,
     }
@@ -108,13 +129,22 @@ async fn handle_evm_native_tx<M: Middleware>(
         Some(receipt) => {
             result_sender
                 .send(Ok(TxResult::Evm(receipt.clone())))
-                .map_err(|e| Error::Custom(format!("Failed to send receipt: {:?}", e)))?;
+                .map_err(|e| {
+                    Error::Custom(format!("Failed to send receipt: {:?}", e))
+                })?;
             Ok(receipt)
         }
         None => {
             result_sender
-                .send(Err(Error::Custom("Failed to send transaction".to_string())))
-                .map_err(|e| Error::Custom(format!("Failed to send transaction: {:?}", e)))?;
+                .send(Err(Error::Custom(
+                    "Failed to send transaction".to_string(),
+                )))
+                .map_err(|e| {
+                    Error::Custom(format!(
+                        "Failed to send transaction: {:?}",
+                        e
+                    ))
+                })?;
             Err(Error::Custom("Failed to send transaction".to_string()))
         }
     }
@@ -129,14 +159,13 @@ async fn handle_evm_token_tx<M: Middleware>(
 ) -> Result<TransactionReceipt, Error> {
     let has_signer = provider.is_signer().await;
     assert!(has_signer, "Provider must have signer");
-    let contract = ERC20PresetMinterPauserContract::new(token_address, Arc::new(provider));
+    let contract =
+        ERC20PresetMinterPauserContract::new(token_address, Arc::new(provider));
 
     // Fetch the decimals used by the contract so we can compute the decimal amount to send.
-    let decimals = contract
-        .decimals()
-        .call()
-        .await
-        .map_err(|e| Error::Custom(format!("Failed to fetch decimals: {:?}", e)))?;
+    let decimals = contract.decimals().call().await.map_err(|e| {
+        Error::Custom(format!("Failed to fetch decimals: {:?}", e))
+    })?;
     let decimal_amount = amount * U256::exp10(decimals as usize);
 
     // Transfer the desired amount of tokens to the `to_address`
@@ -152,13 +181,22 @@ async fn handle_evm_token_tx<M: Middleware>(
         Some(receipt) => {
             result_sender
                 .send(Ok(TxResult::Evm(receipt.clone())))
-                .map_err(|e| Error::Custom(format!("Failed to send receipt: {:?}", e)))?;
+                .map_err(|e| {
+                    Error::Custom(format!("Failed to send receipt: {:?}", e))
+                })?;
             Ok(receipt)
         }
         None => {
             result_sender
-                .send(Err(Error::Custom("Failed to send transaction".to_string())))
-                .map_err(|e| Error::Custom(format!("Failed to send transaction: {:?}", e)))?;
+                .send(Err(Error::Custom(
+                    "Failed to send transaction".to_string(),
+                )))
+                .map_err(|e| {
+                    Error::Custom(format!(
+                        "Failed to send transaction: {:?}",
+                        e
+                    ))
+                })?;
             Err(Error::Custom("Failed to send transaction".to_string()))
         }
     }
@@ -174,9 +212,20 @@ async fn handle_substrate_tx(
 ) -> Result<H256, Error> {
     match asset_id {
         Some(asset_id) => {
-            handle_substrate_token_tx(api, to, amount, asset_id, signer, result_sender).await
+            handle_substrate_token_tx(
+                api,
+                to,
+                amount,
+                asset_id,
+                signer,
+                result_sender,
+            )
+            .await
         }
-        None => handle_substrate_native_tx(api, to, amount, signer, result_sender).await,
+        None => {
+            handle_substrate_native_tx(api, to, amount, signer, result_sender)
+                .await
+        }
     }
 }
 
@@ -188,12 +237,16 @@ async fn handle_substrate_native_tx(
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<H256, Error> {
     let to_address = MultiAddress::Id(to.clone());
-    let balance_transfer_tx = RuntimeApi::tx().balances().transfer(to_address, amount);
+    let balance_transfer_tx =
+        RuntimeApi::tx().balances().transfer(to_address, amount);
 
     // Sign and submit the extrinsic.
     let tx_result = api
         .tx()
-        .sign_and_submit_then_watch_default(&balance_transfer_tx, &PairSigner::new(signer))
+        .sign_and_submit_then_watch_default(
+            &balance_transfer_tx,
+            &PairSigner::new(signer),
+        )
         .await
         .map_err(|e| Error::Custom(e.to_string()))?;
 
@@ -215,7 +268,9 @@ async fn handle_substrate_native_tx(
     // Return the transaction hash.
     result_sender
         .send(Ok(TxResult::Substrate(tx_hash)))
-        .map_err(|e| Error::Custom(format!("Failed to send tx_hash: {:?}", e)))?;
+        .map_err(|e| {
+            Error::Custom(format!("Failed to send tx_hash: {:?}", e))
+        })?;
 
     Ok(tx_hash)
 }
@@ -236,7 +291,10 @@ async fn handle_substrate_token_tx(
     // Sign and submit the extrinsic.
     let tx_result = api
         .tx()
-        .sign_and_submit_then_watch_default(&token_transfer_tx, &PairSigner::new(signer))
+        .sign_and_submit_then_watch_default(
+            &token_transfer_tx,
+            &PairSigner::new(signer),
+        )
         .await
         .map_err(|e| Error::Custom(e.to_string()))?;
 
@@ -258,7 +316,9 @@ async fn handle_substrate_token_tx(
     // Return the transaction hash.
     result_sender
         .send(Ok(TxResult::Substrate(tx_hash)))
-        .map_err(|_e| Error::Custom(format!("Failed to send tx_hash: {}", tx_hash)))?;
+        .map_err(|_e| {
+            Error::Custom(format!("Failed to send tx_hash: {}", tx_hash))
+        })?;
 
     Ok(tx_hash)
 }

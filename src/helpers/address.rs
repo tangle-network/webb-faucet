@@ -40,7 +40,9 @@ impl MultiAddress {
     /// Returns the [`Substrate`] address if the multi address is [`Substrate`].
     /// Returns `None` if the multi address is [`Ethereum`].
     #[must_use]
-    pub fn substrate(&self) -> Option<&webb::substrate::subxt::utils::AccountId32> {
+    pub fn substrate(
+        &self,
+    ) -> Option<&webb::substrate::subxt::utils::AccountId32> {
         match self {
             Self::Ethereum(..) => None,
             Self::Substrate(address) => Some(address),
@@ -60,7 +62,9 @@ impl core::fmt::Display for MultiAddress {
 impl From<MultiAddress> for UniversalWalletAddress {
     fn from(multi_address: MultiAddress) -> Self {
         match multi_address {
-            MultiAddress::Ethereum(address) => Self::Ethereum(address.to_fixed_bytes()),
+            MultiAddress::Ethereum(address) => {
+                Self::Ethereum(address.to_fixed_bytes())
+            }
             MultiAddress::Substrate(address) => Self::Substrate(address.0),
         }
     }

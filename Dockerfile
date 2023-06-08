@@ -23,9 +23,8 @@ VOLUME [ "/faucet" ]
 
 WORKDIR /faucet
 
-RUN mkdir -p /usr/bin || exit 0
-ADD build/webb-faucet /usr/bin/webb-faucet
+ADD build/webb-faucet /webb-faucet
 
 EXPOSE 8000
 
-CMD ["/usr/bin/webb-faucet"]
+CMD ["/webb-faucet"]

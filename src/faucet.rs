@@ -1,4 +1,4 @@
-use chrono::{Days, Utc};
+use chrono::{Duration, Utc};
 
 use rocket::futures::{self, TryFutureExt};
 use rocket::http::Status;
@@ -27,7 +27,6 @@ use crate::txes::types::{
     EthersClient, EvmProviders, SubstrateProviders, Transaction, TxResult,
 };
 
-pub const FAUCET_REQUEST_AMOUNT: u64 = 20;
 pub const WEBB_TWITTER_ACCOUNT_ID: u64 = 1355009685859033092;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -47,6 +46,7 @@ pub struct FaucetRequest {
 
 pub async fn handle_token_transfer(
     faucet_req: FaucetRequest,
+    app_config: &State<crate::AppConfig>,
     evm_providers: &State<EvmProviders<EthersClient>>,
     substrate_providers: &State<
         SubstrateProviders<OnlineClient<PolkadotConfig>>,
@@ -75,7 +75,7 @@ pub async fn handle_token_transfer(
                 .send(Transaction::Evm {
                     provider,
                     to: dest,
-                    amount: FAUCET_REQUEST_AMOUNT.into(),
+                    amount: app_config.token_amount.into(),
                     token_address: Some(token_address.into()),
                     result_sender,
                 })
@@ -98,7 +98,7 @@ pub async fn handle_token_transfer(
                 .send(Transaction::Substrate {
                     api,
                     to: dest,
-                    amount: FAUCET_REQUEST_AMOUNT.into(),
+                    amount: app_config.token_amount.into(),
                     asset_id: None,
                     signer: signer_pair.inner().clone(),
                     result_sender,
@@ -129,6 +129,7 @@ pub async fn handle_token_transfer(
 #[post("/faucet", data = "<payload>")]
 #[allow(clippy::too_many_arguments)]
 pub async fn faucet(
+    app_config: &State<crate::AppConfig>,
     twitter_bearer_token: auth::TwitterBearerToken<'_>,
     payload: Json<Payload>,
     auth_db: &State<SledAuthDb>,
@@ -248,29 +249,28 @@ pub async fn faucet(
         .await?;
     let last_claim_date = claim_data.map(|c| c.last_claimed_date);
     let now = Utc::now();
-    // check if the rust env is test, if so, skip the 24 hour check
-    let rust_env = std::env::var("ROCKET_PROFILE").unwrap_or_default();
-    if rust_env == "release" {
-        if let Some(last_claim_date) = last_claim_date {
-            if last_claim_date <= now.checked_add_days(Days::new(1)).unwrap() {
-                println!(
-                    "{:?} User {:?} tried to claim again before 24 hours",
-                    Utc::now().to_rfc3339(),
-                    twitter_user.username
-                );
-                return Ok(status::Custom(
-                    Status::UnprocessableEntity,
-                    json!({
-                        "error": "Error transferring tokens",
-                        "reason": "You can only claim once every 24 hours",
-                        "wallet": wallet_address,
-                        "typed_chain_id": typed_chain_id,
-                        "last_claimed_date": last_claim_date,
-                        "user": twitter_user,
-                    })
-                    .to_string(),
-                ));
-            }
+    if let Some(last_claim_date) = last_claim_date {
+        let v = Duration::from_std(app_config.time_to_wait_between_claims)
+            .expect("valid duration");
+        if last_claim_date <= now.checked_add_signed(v).unwrap() {
+            println!(
+                "{:?} User {:?} tried to claim again before the time limit",
+                Utc::now().to_rfc3339(),
+                twitter_user.username
+            );
+            return Ok(status::Custom(
+                Status::UnprocessableEntity,
+                json!({
+                    "error": "Error claiming tokens",
+                    "reason": "You can't claim right now. Please try again later.",
+                    "wallet": wallet_address,
+                    "typed_chain_id": typed_chain_id,
+                    "last_claimed_date": last_claim_date,
+                    "time_to_wait_between_claims_ms": app_config.time_to_wait_between_claims.as_millis(),
+                    "user": twitter_user,
+                })
+                .to_string(),
+            ));
         }
     }
 
@@ -298,6 +298,7 @@ pub async fn faucet(
 
     match handle_token_transfer(
         faucet_data,
+        app_config,
         evm_providers,
         substrate_providers,
         evm_wallet,
@@ -306,14 +307,14 @@ pub async fn faucet(
     )
     .await
     {
-        Ok(tx_hash) => Ok(status::Custom(
+        Ok(tx_result) => Ok(status::Custom(
             Status::Ok,
             json!({
                 "wallet": wallet_address,
                 "typed_chain_id": typed_chain_id,
                 "last_claimed_date": now,
                 "user": twitter_user,
-                "tx_hash": tx_hash,
+                "tx_result": tx_result,
             })
             .to_string(),
         )),

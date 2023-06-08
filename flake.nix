@@ -42,6 +42,8 @@
             pkgs.nodePackages.yarn
             # Finally the toolchain
             toolchain
+            # Rust tools
+            pkgs.cargo-machete
           ];
           packages = [ ];
 

@@ -1,6 +1,8 @@
 [default]
 db = "faucet"
 mnemonic="<mnemonic>"
+time_to_wait_between_claims = { secs = 0, nanos = 0 }
+token_amount = 10
 
 [global.oauth.twitter]
 provider = "twitter"

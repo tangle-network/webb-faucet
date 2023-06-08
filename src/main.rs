@@ -52,10 +52,28 @@ fn provider_fairing<P: auth::providers::Provider + 'static>() -> impl Fairing {
     OAuth2::<P>::fairing(P::name())
 }
 
+fn default_time_to_wait_between_claims() -> std::time::Duration {
+    // check if the rust env is debug, if so, skip the 24 hour check
+    let rocket_profile = std::env::var("ROCKET_PROFILE").unwrap_or_default();
+    if rocket_profile == "debug" {
+        std::time::Duration::from_secs(0)
+    } else {
+        std::time::Duration::from_secs(24 * 60 * 60)
+    }
+}
+
+const fn default_token_amount() -> u64 {
+    20
+}
+
 #[derive(Deserialize)]
 pub struct AppConfig {
     db: PathBuf,
     mnemonic: String,
+    #[serde(default = "default_time_to_wait_between_claims")]
+    pub time_to_wait_between_claims: std::time::Duration,
+    #[serde(default = "default_token_amount")]
+    pub token_amount: u64,
 }
 
 fn auth_db_firing() -> impl Fairing {

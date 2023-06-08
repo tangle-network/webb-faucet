@@ -17,10 +17,11 @@ FROM gcr.io/distroless/static
 LABEL APP="Webb Faucet"
 LABEL AUTHOR="Webb Developers <dev@webb.tools>"
 
-ENV ROCKET_CONFIG=/config/Rocket.toml
 ENV RUST_BACKTRACE=full
 
-VOLUME [ "/config" ]
+VOLUME [ "/faucet" ]
+
+WORKDIR /faucet
 
 ADD build/webb-faucet webb-faucet
 

@@ -173,62 +173,76 @@ pub async fn faucet(
 
     println!("Twitter User: {:#?}", twitter_user.username);
 
-    let mut is_following_webb = false;
-    let mut maybe_pagination_token: Option<String> = None;
-    let mut is_first_page = true;
+    let is_following_webb = if app_config.verify_following_webb {
+        let mut is_following_webb = false;
+        let mut maybe_pagination_token: Option<String> = None;
+        let mut is_first_page = true;
 
-    // Check if the user is following the webb twitter account
-    while is_first_page
-        || !is_following_webb && maybe_pagination_token.is_some()
-    {
         // Check if the user is following the webb twitter account
-        // - the account username is `webbprotocol`
-        // - the user id is `1355009685859033092`
-        let mut get_my_following_req =
-            twitter_api.with_user_ctx().await?.get_my_following();
+        while is_first_page
+            || !is_following_webb && maybe_pagination_token.is_some()
+        {
+            // Check if the user is following the webb twitter account
+            // - the account username is `webbprotocol`
+            // - the user id is `1355009685859033092`
+            let mut get_my_following_req =
+                twitter_api.with_user_ctx().await?.get_my_following();
 
-        let mut req = get_my_following_req
-            .user_fields([UserField::Id])
-            .max_results(100);
-        if let Some(ref token) = maybe_pagination_token {
-            req = req.pagination_token(token);
-        }
-
-        let my_followers = req.send().await;
-        // Check if the user is following the webb twitter account and return
-        // an error if they are not. If successful, return a bool and a pagination token.
-        // The pagination token is used to get the next page of followers.
-        let (is_following_webb_, maybe_pagination_token_) = match my_followers {
-            Ok(followers) => {
-                // Get number of followers
-                let num_followers =
-                    followers.data.as_ref().map(Vec::len).unwrap_or_default();
-                let next_token =
-                    followers.meta.clone().and_then(|m| m.next_token);
-                println!(
-                    "Got {} followers, next token: {:?}",
-                    num_followers, next_token
-                );
-
-                let webb_user_id = NumericId::new(WEBB_TWITTER_ACCOUNT_ID);
-                (
-                    followers
-                        .data
-                        .clone()
-                        .map(|u| {
-                            u.iter().any(|follower| follower.id == webb_user_id)
-                        })
-                        .unwrap_or(false),
-                    next_token,
-                )
+            let mut req = get_my_following_req
+                .user_fields([UserField::Id])
+                .max_results(100);
+            if let Some(ref token) = maybe_pagination_token {
+                req = req.pagination_token(token);
             }
-            Err(e) => return Err(Error::TwitterError(e)),
-        };
 
-        is_following_webb = is_following_webb_;
-        maybe_pagination_token = maybe_pagination_token_;
-        is_first_page = false;
-    }
+            let my_followers = req.send().await;
+            // Check if the user is following the webb twitter account and return
+            // an error if they are not. If successful, return a bool and a pagination token.
+            // The pagination token is used to get the next page of followers.
+            let (is_following_webb_, maybe_pagination_token_) =
+                match my_followers {
+                    Ok(followers) => {
+                        // Get number of followers
+                        let num_followers = followers
+                            .data
+                            .as_ref()
+                            .map(Vec::len)
+                            .unwrap_or_default();
+                        let next_token =
+                            followers.meta.clone().and_then(|m| m.next_token);
+                        println!(
+                            "Got {} followers, next token: {:?}",
+                            num_followers, next_token
+                        );
+
+                        let webb_user_id =
+                            NumericId::new(WEBB_TWITTER_ACCOUNT_ID);
+                        (
+                            followers
+                                .data
+                                .clone()
+                                .map(|u| {
+                                    u.iter().any(|follower| {
+                                        follower.id == webb_user_id
+                                    })
+                                })
+                                .unwrap_or(false),
+                            next_token,
+                        )
+                    }
+                    Err(e) => return Err(Error::TwitterError(e)),
+                };
+
+            is_following_webb = is_following_webb_;
+            maybe_pagination_token = maybe_pagination_token_;
+            is_first_page = false;
+        }
+        is_following_webb
+    } else {
+        // Skip the verification step
+        println!("Skipping verification step");
+        true
+    };
 
     println!(
         "{:?} User {:?} is following webb: {:?}",

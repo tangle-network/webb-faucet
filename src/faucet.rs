@@ -264,8 +264,9 @@ pub async fn faucet(
     let last_claim_date = claim_data.map(|c| c.last_claimed_date);
     let now = Utc::now();
     if let Some(last_claim_date) = last_claim_date {
-        let time_delay = Duration::from_std(app_config.time_to_wait_between_claims)
-            .expect("valid duration");
+        let time_delay =
+            Duration::from_std(app_config.time_to_wait_between_claims)
+                .expect("valid duration");
         if now < last_claim_date + time_delay {
             println!(
                 "{:?} User {:?} tried to claim again before the time limit",

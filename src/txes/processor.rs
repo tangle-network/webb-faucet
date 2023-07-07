@@ -6,7 +6,7 @@ use ethers::types::{Address, TransactionReceipt, TransactionRequest};
 use rocket::tokio::{self, sync::oneshot};
 use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
-use webb::evm::contract::protocol_solidity::ERC20PresetMinterPauserContract;
+use webb::evm::contract::protocol_solidity::erc20_preset_minter_pauser::ERC20PresetMinterPauserContract;
 use webb::evm::ethers;
 use webb::evm::ethers::types::U256;
 use webb::substrate::subxt::utils::{AccountId32, MultiAddress};

@@ -26,6 +26,7 @@ use txes::{
     types::{EvmProviders, SubstrateProviders},
 };
 use webb::evm::ethers;
+use webb::substrate::subxt;
 use webb::{
     evm::ethers::{
         prelude::{
@@ -209,21 +210,16 @@ fn substrate_providers_firing() -> impl Fairing {
                         let chain_id = network.to_substrate_chain_id().unwrap();
                         let url = get_substrate_rpc_url(chain_id);
                         futures_unordered.push(async move {
-                            let api =
-                                match OnlineClient::<PolkadotConfig>::from_url(
-                                    url,
-                                )
-                                .await
-                                {
-                                    Ok(api) => api,
-                                    Err(e) => {
-                                        return Err(Error::Custom(
-                                            e.to_string(),
-                                        ))
-                                    }
-                                };
-                            Ok((chain_id, api))
-                        });
+                        let res = OnlineClient::<PolkadotConfig>::from_url(url).await;
+                        let api = match res {
+                            Ok(api) => Some(api),
+                            Err(e) => {
+                                eprintln!("Error connecting to substrate node: {e}");
+                                None
+                            }
+                        };
+                        Result::<_, subxt::Error>::Ok((chain_id, api))
+                    });
                     }
 
                     let mut provider_map: HashMap<
@@ -232,8 +228,11 @@ fn substrate_providers_firing() -> impl Fairing {
                     > = HashMap::new();
                     while let Some(result) = futures_unordered.next().await {
                         match result {
-                            Ok((chain_id, api)) => {
+                            Ok((chain_id, Some(api))) => {
                                 provider_map.insert(chain_id, api);
+                            }
+                            Ok((chain_id, None)) => {
+                                eprintln!("Skipped connecting to substrate node: {chain_id}");
                             }
                             Err(_e) => return Err(rocket),
                         }

@@ -12,6 +12,7 @@ use twitter_v2::{
     authorization::BearerToken, id::NumericId, query::UserField, TwitterApi,
 };
 
+use webb::evm::ethers;
 use webb::evm::ethers::prelude::k256::ecdsa::SigningKey;
 use webb::evm::ethers::signers::Wallet;
 use webb::substrate::subxt::OnlineClient;
@@ -42,6 +43,8 @@ pub struct Payload {
 pub struct FaucetRequest {
     wallet_address: MultiAddress,
     typed_chain_id: webb_proposals::TypedChainId,
+    #[serde(default)]
+    only_native_token: bool,
 }
 
 pub async fn handle_token_transfer(
@@ -67,7 +70,11 @@ pub async fn handle_token_transfer(
                     chain_id
                 )))?
                 .clone();
-            let token_address = get_evm_token_address(chain_id.into());
+            let token_address = if faucet_req.only_native_token {
+                None
+            } else {
+                Some(get_evm_token_address(chain_id.into()).into())
+            };
             let dest = *faucet_req.wallet_address.ethereum().unwrap();
 
             // Send transaction to the processor.
@@ -76,7 +83,11 @@ pub async fn handle_token_transfer(
                     provider,
                     to: dest,
                     amount: app_config.token_amount.into(),
-                    token_address: Some(token_address.into()),
+                    native_token_amount: ethers::utils::parse_ether(
+                        app_config.native_token_amount,
+                    )
+                    .expect("Failed to parse native token amount"),
+                    token_address,
                     result_sender,
                 })
                 .expect("Failed to send transaction to processor");
@@ -99,6 +110,11 @@ pub async fn handle_token_transfer(
                     api,
                     to: dest,
                     amount: app_config.token_amount.into(),
+                    native_token_amount: ethers::utils::parse_ether(
+                        app_config.native_token_amount,
+                    )
+                    .expect("Failed to parse native token amount")
+                    .as_u128(),
                     asset_id: None,
                     signer: signer_pair.inner().clone(),
                     result_sender,
@@ -148,6 +164,7 @@ pub async fn faucet(
     let FaucetRequest {
         wallet_address,
         typed_chain_id,
+        ..
     } = faucet_data.clone();
     println!(
         "Requesting faucet for (address {}, chain: {:?}",

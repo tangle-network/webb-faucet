@@ -48,6 +48,7 @@ pub enum Transaction {
         provider: EthersClient,
         to: Address,
         amount: U256,
+        native_token_amount: U256,
         token_address: Option<Address>,
         result_sender: oneshot::Sender<Result<TxResult, Error>>,
     },
@@ -55,6 +56,7 @@ pub enum Transaction {
         api: OnlineClient<PolkadotConfig>,
         to: AccountId32,
         amount: u128,
+        native_token_amount: u128,
         asset_id: Option<u32>,
         signer: sp_core::sr25519::Pair,
         result_sender: oneshot::Sender<Result<TxResult, Error>>,
@@ -68,6 +70,7 @@ impl std::fmt::Debug for Transaction {
                 provider,
                 to,
                 amount,
+                native_token_amount,
                 token_address,
                 result_sender,
             } => f
@@ -75,6 +78,7 @@ impl std::fmt::Debug for Transaction {
                 .field("provider", provider)
                 .field("to", to)
                 .field("amount", amount)
+                .field("native_token_amount", native_token_amount)
                 .field("token_address", token_address)
                 .field("result_sender", result_sender)
                 .finish(),
@@ -84,11 +88,13 @@ impl std::fmt::Debug for Transaction {
                 amount,
                 asset_id,
                 result_sender,
+                native_token_amount,
                 ..
             } => f
                 .debug_struct("Substrate")
                 .field("api", api)
                 .field("to", to)
+                .field("native_token_amount", native_token_amount)
                 .field("amount", amount)
                 .field("asset_id", asset_id)
                 .field("signer", &"<hidden>")

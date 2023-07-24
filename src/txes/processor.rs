@@ -35,6 +35,7 @@ impl TransactionProcessingSystem {
                         provider,
                         to,
                         amount,
+                        native_token_amount,
                         token_address,
                         result_sender,
                     } => {
@@ -42,6 +43,7 @@ impl TransactionProcessingSystem {
                             provider,
                             to,
                             amount,
+                            native_token_amount,
                             token_address,
                             result_sender,
                         )
@@ -53,6 +55,7 @@ impl TransactionProcessingSystem {
                     Transaction::Substrate {
                         api,
                         to,
+                        native_token_amount,
                         amount,
                         asset_id,
                         signer,
@@ -62,6 +65,7 @@ impl TransactionProcessingSystem {
                             api,
                             to,
                             amount,
+                            native_token_amount,
                             asset_id,
                             signer,
                             result_sender,
@@ -84,21 +88,17 @@ async fn handle_evm_tx<M: Middleware>(
     provider: M,
     to: Address,
     amount: U256,
+    native_token_amount: U256,
     token_address: Option<Address>,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<TransactionReceipt, Error> {
-    match token_address {
-        Some(token_address) => {
-            handle_evm_token_tx(
-                provider,
-                to,
-                amount,
-                token_address,
-                result_sender,
-            )
+    if let Some(token_address) = token_address {
+        handle_evm_token_tx(provider, to, amount, token_address, result_sender)
             .await
-        }
-        None => handle_evm_native_tx(provider, to, amount, result_sender).await,
+    } else {
+        // Only send native token if no token address is provided
+        handle_evm_native_tx(provider, to, native_token_amount, result_sender)
+            .await
     }
 }
 
@@ -109,14 +109,9 @@ async fn handle_evm_native_tx<M: Middleware>(
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<TransactionReceipt, Error> {
     // Craft the tx
-    let accounts = provider
-        .get_accounts()
-        .await
-        .map_err(|e| Error::Custom(e.to_string()))?;
-    let tx = TransactionRequest::new()
-        .to(to)
-        .value(amount)
-        .from(accounts[0]);
+    let has_signer = provider.is_signer().await;
+    assert!(has_signer, "Provider must have signer");
+    let tx = TransactionRequest::new().to(to).value(amount);
 
     // Broadcast it via the eth_sendTransaction API
     let tx_receipt = provider
@@ -206,6 +201,7 @@ async fn handle_substrate_tx(
     api: OnlineClient<PolkadotConfig>,
     to: AccountId32,
     amount: u128,
+    native_token_amount: u128,
     asset_id: Option<u32>,
     signer: sp_core::sr25519::Pair,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
@@ -223,8 +219,14 @@ async fn handle_substrate_tx(
             .await
         }
         None => {
-            handle_substrate_native_tx(api, to, amount, signer, result_sender)
-                .await
+            handle_substrate_native_tx(
+                api,
+                to,
+                native_token_amount,
+                signer,
+                result_sender,
+            )
+            .await
         }
     }
 }

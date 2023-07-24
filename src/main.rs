@@ -67,6 +67,10 @@ const fn default_token_amount() -> u64 {
     20
 }
 
+const fn default_native_token_amount() -> f64 {
+    0.5
+}
+
 const fn default_verify_following_webb() -> bool {
     true
 }
@@ -79,6 +83,8 @@ pub struct AppConfig {
     pub time_to_wait_between_claims: std::time::Duration,
     #[serde(default = "default_token_amount")]
     pub token_amount: u64,
+    #[serde(default = "default_native_token_amount")]
+    pub native_token_amount: f64,
     /// Whether to verify that the user is following the webb twitter account
     #[serde(default = "default_verify_following_webb")]
     pub verify_following_webb: bool,

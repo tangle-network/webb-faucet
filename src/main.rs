@@ -77,12 +77,18 @@ const fn default_verify_following_webb() -> bool {
 
 #[derive(Deserialize)]
 pub struct AppConfig {
+    /// The database to use for the auth and claims
     db: PathBuf,
+    /// The mnemonic to use for the faucet
     mnemonic: String,
+    /// The amount of time to wait between claims
+    /// This is to prevent users from spamming the faucet
     #[serde(default = "default_time_to_wait_between_claims")]
     pub time_to_wait_between_claims: std::time::Duration,
+    /// The amount of ERC20 tokens to send to the user
     #[serde(default = "default_token_amount")]
     pub token_amount: u64,
+    /// The amount of native tokens to send to the user
     #[serde(default = "default_native_token_amount")]
     pub native_token_amount: f64,
     /// Whether to verify that the user is following the webb twitter account
@@ -147,8 +153,13 @@ fn ethers_providers_firing() -> impl Fairing {
             .state::<AppConfig>()
         {
             Some(config) => {
-                let networks =
-                    vec![Network::Athena, Network::Hermes, Network::Demeter];
+                // Supported networks
+                let networks = vec![
+                    Network::Athena,
+                    Network::Hermes,
+                    Network::Demeter,
+                    Network::TangleEVMTestnet,
+                ];
 
                 let mnemonic: String = config.mnemonic.parse().unwrap();
                 let wallet = match MnemonicBuilder::<English>::default()

@@ -12,6 +12,7 @@ pub enum Network {
     Hermes,
     Athena,
     Demeter,
+    TangleEVMTestnet,
 
     // Substrate
     Tangle,
@@ -31,6 +32,7 @@ impl Network {
             "hermes" => Some(Self::Hermes),
             "athena" => Some(Self::Athena),
             "demeter" => Some(Self::Demeter),
+            "tangle-evm-testnet" => Some(Self::TangleEVMTestnet),
             _ => None,
         }
     }
@@ -48,6 +50,7 @@ impl Network {
             3884533461 => Some(Self::Athena),
             3884533462 => Some(Self::Hermes),
             3884533463 => Some(Self::Demeter),
+            4006 => Some(Self::TangleEVMTestnet),
             _ => None,
         }
     }
@@ -65,6 +68,7 @@ impl Network {
             Self::Athena => Some(3884533461),
             Self::Hermes => Some(3884533462),
             Self::Demeter => Some(3884533463),
+            Self::TangleEVMTestnet => Some(4006),
             _ => None,
         }
     }
@@ -101,6 +105,7 @@ impl Network {
             Self::ArbitrumGoerli => Some(TypedChainId::Evm(421613)),
             Self::Athena => Some(TypedChainId::Evm(3884533461)),
             Self::Demeter => Some(TypedChainId::Evm(3884533463)),
+            Self::TangleEVMTestnet => Some(TypedChainId::Evm(4006)),
             Self::Goerli => Some(TypedChainId::Evm(5)),
             Self::Hermes => Some(TypedChainId::Evm(3884533462)),
             Self::MoonbaseAlpha => Some(TypedChainId::Evm(1287)),

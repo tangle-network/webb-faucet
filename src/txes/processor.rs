@@ -111,9 +111,11 @@ async fn handle_evm_native_tx<M: Middleware>(
     // Craft the tx
     let has_signer = provider.is_signer().await;
     assert!(has_signer, "Provider must have signer");
-    let tx = TransactionRequest::new().to(to).value(amount);
+    let tx = TransactionRequest::new()
+        .to(to)
+        .value(amount)
+        .gas(U256::from(22000u64)); // TODO: Make this configurable
 
-    // Broadcast it via the eth_sendTransaction API
     let tx_receipt = provider
         .send_transaction(tx, None)
         .await

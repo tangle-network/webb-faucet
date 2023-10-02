@@ -13,6 +13,7 @@ type Chain = EvmChain | SubstrateChain;
 const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
   const [chain, setChain] = useState<Chain>({ Evm: 3884533461 });
   const [address, setAddress] = useState<string>("");
+  const [onlyNativeToken, setOnlyNativeToken] = useState<boolean>(true);
 
   const claimFunds = async () => {
     // Implement your claim funds logic here
@@ -27,14 +28,15 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
               type: (chain as EvmChain).Evm
                 ? "ethereum"
                 : (chain as SubstrateChain).Substrate
-                ? "substrate"
-                : "Unknown",
+                  ? "substrate"
+                  : "Unknown",
               value: address,
             },
             typedChainId: {
               type: (chain as EvmChain).Evm ? "Evm" : "Substrate",
               id: (chain as EvmChain).Evm || (chain as SubstrateChain).Substrate,
             },
+            onlyNativeToken,
           },
         }),
         {
@@ -86,9 +88,8 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
         <option value={JSON.stringify({ Evm: 3884533461 })}>Athena</option>
         <option value={JSON.stringify({ Evm: 3884533462 })}>Hermes</option>
         <option value={JSON.stringify({ Evm: 3884533463 })}>Demeter</option>
-        <option value={JSON.stringify({ Substrate: 1081 })}>Tangle Standalone</option>
-        <option value={JSON.stringify({ Evm: 5 })}>Gorli</option>
-        <option value={JSON.stringify({ Evm: 80001 })}>Mumbai</option>
+        <option value={JSON.stringify({ Evm: 4006 })}>Tangle EVM</option>
+        <option value={JSON.stringify({ Substrate: 1081 })}>Tangle</option>
       </select>
 
       <label htmlFor="address">Address:</label>
@@ -99,6 +100,17 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
         onChange={(event) => setAddress(event.target.value)}
       />
 
+      <input
+        id="only-native-token"
+        type="checkbox"
+        onChange={(event) => setOnlyNativeToken(event.target.checked)}
+        checked={onlyNativeToken}
+      >
+      </input>
+
+      <label htmlFor="only-native-token">
+        {onlyNativeToken ? "Only Native Token" : "ERC20/Assets Tokens"}
+      </label>
       <button
         className="submit-button"
         disabled={accessToken === null ? true : false}
@@ -106,7 +118,7 @@ const ClaimFundsForm: React.FC<ClaimFundsFormProps> = ({ accessToken }) => {
       >
         Claim
       </button>
-    </form>
+    </form >
   );
 };
 

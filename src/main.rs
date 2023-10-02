@@ -299,5 +299,5 @@ async fn rocket() -> _ {
         .manage(cors.to_cors().unwrap())
         .manage(tx_sender)
         .mount("/", rocket_cors::catch_all_options_routes())
-        .mount("/", routes![auth::login::twitter, faucet::faucet,])
+        .mount("/", routes![auth::login::twitter, faucet::faucet])
 }

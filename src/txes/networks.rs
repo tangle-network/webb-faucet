@@ -33,6 +33,7 @@ impl Network {
             "athena" => Some(Self::Athena),
             "demeter" => Some(Self::Demeter),
             "tangle-evm-testnet" => Some(Self::TangleEVMTestnet),
+            "tangle" => Some(Self::Tangle),
             _ => None,
         }
     }

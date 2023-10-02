@@ -57,6 +57,9 @@
     "https://demeter-testnet.webb.tools"
   ],
   "4006": [
-    "https://tangle-standalone-archive.webb.tools"
+    "https://rpc.tangle.tools"
+  ],
+  "1081": [
+    "ws://3.144.199.9:9944"
   ]
 }

@@ -48,10 +48,11 @@ pub fn get_evm_rpc_url(chain_id: u64) -> String {
     rpc_data[0].clone()
 }
 
-pub fn get_substrate_rpc_url(_chain_id: u64) -> String {
-    // TODO: Decide if we want to push this into config
-    let url = "wss://tangle-standalone-archive.webb.tools:443";
-    url.to_string()
+pub fn get_substrate_rpc_url(chain_id: u64) -> String {
+    let rpc_map = read_rpc_data();
+    let binding = vec!["ws://localhost:9944".to_string()];
+    let rpc_data = rpc_map.get(&chain_id).unwrap_or(&binding);
+    rpc_data[0].clone()
 }
 
 pub fn get_evm_token_address(chain_id: u64) -> [u8; 20] {

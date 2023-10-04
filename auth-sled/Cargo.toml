@@ -13,4 +13,4 @@ sled = "0.34.7"
 webb-auth = { path = "../auth" }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 thiserror = "1.0"
-webb-proposals = "0.5.4"
+webb-proposals = { git = "https://github.com/webb-tools/webb-rs", rev="a960eaf", features = ["scale"] }

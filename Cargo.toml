@@ -18,15 +18,15 @@ rocket_oauth2 = { git = "https://github.com/webb-tools/rocket_oauth2", branch = 
 # rocket_oauth2 = { version = "0.5.0-rc.1", features = ["hyper_rustls_adapter"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sp-core = "21.0.0"
 thiserror = "1.0"
 twitter-v2 = { version = "0.1.8", default-features = false, features = ["oauth2", "rustls-tls"] }
 
 webb-auth-sled = { path = "./auth-sled" }
 webb-auth = { path = "./auth" }
 
-webb = "0.6.1"
-webb-proposals = "0.5.4"
+webb = "0.8.0"
+webb-proposals = { git = "https://github.com/webb-tools/webb-rs", rev="a960eaf", features = ["scale"] }
+subxt-signer = { version = "0.31.0", features = ["subxt"] }
 rocket_cors = { git = "https://github.com/lawliet89/rocket_cors", branch = "master" }
 
 [features]

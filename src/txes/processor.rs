@@ -1,16 +1,17 @@
+use std::ops::Div;
 use std::sync::Arc;
 
+use crate::subxt::utils::H256;
 use ethers::prelude::ContractCall;
 use ethers::providers::Middleware;
 use ethers::types::{Address, TransactionReceipt, TransactionRequest};
 use rocket::tokio::{self, sync::oneshot};
-use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
 use webb::evm::contract::protocol_solidity::erc20_preset_minter_pauser::ERC20PresetMinterPauserContract;
 use webb::evm::ethers;
 use webb::evm::ethers::types::U256;
 use webb::substrate::subxt::utils::{AccountId32, MultiAddress};
-use webb::substrate::subxt::{tx::PairSigner, OnlineClient, PolkadotConfig};
+use webb::substrate::subxt::{OnlineClient, PolkadotConfig};
 use webb::substrate::tangle_runtime::api as RuntimeApi;
 
 use crate::error::Error;
@@ -202,24 +203,17 @@ async fn handle_evm_token_tx<M: Middleware>(
 async fn handle_substrate_tx(
     api: OnlineClient<PolkadotConfig>,
     to: AccountId32,
-    amount: u128,
+    _amount: u128,
     native_token_amount: u128,
     asset_id: Option<u32>,
-    signer: sp_core::sr25519::Pair,
+    signer: subxt_signer::sr25519::Keypair,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<H256, Error> {
     match asset_id {
-        Some(asset_id) => {
-            handle_substrate_token_tx(
-                api,
-                to,
-                amount,
-                asset_id,
-                signer,
-                result_sender,
-            )
-            .await
-        }
+        Some(asset_id) => Err(Error::Custom(format!(
+            "Substrate only supports sending native tokens. Asset ID {} not supported",
+            asset_id
+        ))),
         None => {
             handle_substrate_native_tx(
                 api,
@@ -237,20 +231,16 @@ async fn handle_substrate_native_tx(
     api: OnlineClient<PolkadotConfig>,
     to: AccountId32,
     amount: u128,
-    signer: sp_core::sr25519::Pair,
+    signer: subxt_signer::sr25519::Keypair,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<H256, Error> {
     let to_address = MultiAddress::Id(to.clone());
     let balance_transfer_tx =
         RuntimeApi::tx().balances().transfer(to_address, amount);
-
     // Sign and submit the extrinsic.
     let tx_result = api
         .tx()
-        .sign_and_submit_then_watch_default(
-            &balance_transfer_tx,
-            &PairSigner::new(signer),
-        )
+        .sign_and_submit_then_watch_default(&balance_transfer_tx, &signer)
         .await
         .map_err(|e| Error::Custom(e.to_string()))?;
 
@@ -260,68 +250,27 @@ async fn handle_substrate_native_tx(
         .wait_for_finalized_success()
         .await
         .map_err(|e| Error::Custom(e.to_string()))?;
+    let block_hash = events.block_hash();
 
     // Find a Transfer event and print it.
     let transfer_event = events
         .find_first::<RuntimeApi::balances::events::Transfer>()
         .map_err(|e| Error::Custom(e.to_string()))?;
     if let Some(event) = transfer_event {
-        println!("Balance transfer success: {event:?}");
+        let from = event.from;
+        let to = event.to;
+        let amount = event.amount.div(10u128.pow(18));
+        println!("Transfered {amount} tokens {from} -> {to}");
     }
 
     // Return the transaction hash.
     result_sender
-        .send(Ok(TxResult::Substrate(tx_hash)))
+        .send(Ok(TxResult::Substrate {
+            tx_hash,
+            block_hash,
+        }))
         .map_err(|e| {
             Error::Custom(format!("Failed to send tx_hash: {:?}", e))
-        })?;
-
-    Ok(tx_hash)
-}
-
-async fn handle_substrate_token_tx(
-    api: OnlineClient<PolkadotConfig>,
-    to: AccountId32,
-    amount: u128,
-    asset_id: u32,
-    signer: sp_core::sr25519::Pair,
-    result_sender: oneshot::Sender<Result<TxResult, Error>>,
-) -> Result<H256, Error> {
-    let to_address = MultiAddress::Id(to.clone());
-    let token_transfer_tx = RuntimeApi::tx()
-        .tokens()
-        .transfer(to_address, asset_id, amount);
-
-    // Sign and submit the extrinsic.
-    let tx_result = api
-        .tx()
-        .sign_and_submit_then_watch_default(
-            &token_transfer_tx,
-            &PairSigner::new(signer),
-        )
-        .await
-        .map_err(|e| Error::Custom(e.to_string()))?;
-
-    let tx_hash = tx_result.extrinsic_hash();
-
-    let events = tx_result
-        .wait_for_finalized_success()
-        .await
-        .map_err(|e| Error::Custom(e.to_string()))?;
-
-    // Find a Transfer event and print it.
-    let transfer_event = events
-        .find_first::<RuntimeApi::tokens::events::Transfer>()
-        .map_err(|e| Error::Custom(e.to_string()))?;
-    if let Some(event) = transfer_event {
-        println!("Balance transfer success: {event:?}");
-    }
-
-    // Return the transaction hash.
-    result_sender
-        .send(Ok(TxResult::Substrate(tx_hash)))
-        .map_err(|_e| {
-            Error::Custom(format!("Failed to send tx_hash: {}", tx_hash))
         })?;
 
     Ok(tx_hash)

@@ -39,7 +39,10 @@ pub struct SubstrateProviders<T> {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TxResult {
     Evm(TransactionReceipt),
-    Substrate(webb::substrate::subxt::utils::H256),
+    Substrate {
+        block_hash: webb::substrate::subxt::utils::H256,
+        tx_hash: webb::substrate::subxt::utils::H256,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -58,7 +61,7 @@ pub enum Transaction {
         amount: u128,
         native_token_amount: u128,
         asset_id: Option<u32>,
-        signer: sp_core::sr25519::Pair,
+        signer: subxt_signer::sr25519::Keypair,
         result_sender: oneshot::Sender<Result<TxResult, Error>>,
     },
 }

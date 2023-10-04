@@ -19,7 +19,6 @@ use rocket::{launch, log, routes};
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use rocket_oauth2::OAuth2;
 use serde::Deserialize;
-use sp_core::Pair;
 use txes::{
     networks::Network,
     processor::TransactionProcessingSystem,
@@ -130,12 +129,13 @@ fn ethers_wallet_firing() -> impl Fairing {
 }
 
 fn substrate_wallet_firing() -> impl Fairing {
+    use subxt_signer::{bip39::Mnemonic, sr25519::Keypair};
     AdHoc::try_on_ignite("Open substrate wallet", |rocket| async {
         let maybe_wallet = match rocket.state::<AppConfig>() {
             Some(config) => {
-                let mnemonic: String =
+                let mnemonic: Mnemonic =
                     config.mnemonic.parse().expect("Mnemonic is not valid");
-                sp_core::sr25519::Pair::from_string(&mnemonic, None)
+                Keypair::from_phrase(&mnemonic, None)
             }
             None => return Err(rocket),
         };

@@ -55,7 +55,7 @@ pub async fn handle_token_transfer(
         SubstrateProviders<OnlineClient<PolkadotConfig>>,
     >,
     _evm_wallet: &State<Wallet<SigningKey>>,
-    signer_pair: &State<sp_core::sr25519::Pair>,
+    signer_pair: &State<subxt_signer::sr25519::Keypair>,
     tx_sender: &State<UnboundedSender<Transaction>>,
 ) -> Result<TxResult, Error> {
     let (result_sender, result_receiver) = oneshot::channel();
@@ -154,7 +154,7 @@ pub async fn faucet(
         SubstrateProviders<OnlineClient<PolkadotConfig>>,
     >,
     evm_wallet: &State<Wallet<SigningKey>>,
-    signer_pair: &State<sp_core::sr25519::Pair>,
+    signer_pair: &State<subxt_signer::sr25519::Keypair>,
     tx_sender: &State<UnboundedSender<Transaction>>,
 ) -> Result<status::Custom<String>, Error> {
     let faucet_data = payload.clone().into_inner().faucet;

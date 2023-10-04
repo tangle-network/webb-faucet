@@ -10,4 +10,4 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 serde = "1.0"
 thiserror = "1.0"
-webb-proposals = "0.5.4"
+webb-proposals = { git = "https://github.com/webb-tools/webb-rs", rev="a960eaf", features = ["scale"] }

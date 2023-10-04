@@ -6,10 +6,12 @@ import ClaimFundsForm from "../components/ClaimFundsForm";
 
 const postData = async (code: string) => {
   const client_id = process.env.REACT_APP_TWITTER_CLIENT_ID || "";
+  const client_secret = process.env.REACT_APP_TWITTER_CLIENT_SECRET || "";
+  const token = btoa(`${client_id}:${client_secret}`);
   const publicUrl = process.env.PUBLIC_URL || "http://localhost:3000";
   const response = await axios.post(
     // This will be proxied to https:
-    // "https://api.twitter.com/2/oauth2/token"
+    // "https://api.twitter.com/oauth2/token"
     "/2/oauth2/token",
     {
       code,
@@ -22,6 +24,7 @@ const postData = async (code: string) => {
       baseURL: publicUrl,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Basic ${token}`,
       },
     }
   );

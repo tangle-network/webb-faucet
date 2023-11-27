@@ -219,7 +219,11 @@ fn substrate_providers_firing() -> impl Fairing {
         let result: Result<HashMap<u64, OnlineClient<PolkadotConfig>>, Error> =
             match rocket.state::<AppConfig>() {
                 Some(_config) => {
-                    let networks = vec![Network::Tangle];
+                    let networks = vec![
+                        Network::Tangle,
+                        #[cfg(debug_assertions)]
+                        Network::TangleLocal,
+                    ];
 
                     let mut futures_unordered = FuturesUnordered::new();
 

@@ -142,34 +142,33 @@ pub async fn handle_token_transfer(
     Ok(result)
 }
 
-#[post("/faucet", data = "<payload>")]
-#[allow(clippy::too_many_arguments)]
-pub async fn faucet(
+pub async fn check_twitter(
     app_config: &State<crate::AppConfig>,
     twitter_bearer_token: auth::TwitterBearerToken<'_>,
-    payload: Json<Payload>,
-    auth_db: &State<SledAuthDb>,
-    evm_providers: &State<EvmProviders<EthersClient>>,
-    substrate_providers: &State<
-        SubstrateProviders<OnlineClient<PolkadotConfig>>,
-    >,
-    evm_wallet: &State<Wallet<SigningKey>>,
-    signer_pair: &State<subxt_signer::sr25519::Keypair>,
-    tx_sender: &State<UnboundedSender<Transaction>>,
-) -> Result<status::Custom<String>, Error> {
-    let faucet_data = payload.clone().into_inner().faucet;
+) -> Result<twitter_v2::User, Error> {
+    // during debug builds, we return a dummy user
+    if cfg!(debug_assertions) {
+        let token = twitter_bearer_token.token();
+        return Ok(twitter_v2::User {
+            id: NumericId::new(token.parse().unwrap()),
+            username: "dummy".to_string(),
+            name: "dummy".to_string(),
+            created_at: None,
+            description: None,
+            entities: None,
+            location: None,
+            pinned_tweet_id: None,
+            profile_image_url: None,
+            protected: None,
+            public_metrics: None,
+            url: None,
+            verified: None,
+            withheld: None,
+        });
+    }
     let auth = BearerToken::new(twitter_bearer_token.token());
     let twitter_api = TwitterApi::new(auth);
-    // Extract faucet request fields
-    let FaucetRequest {
-        wallet_address,
-        typed_chain_id,
-        ..
-    } = faucet_data.clone();
-    println!(
-        "Requesting faucet for (address {}, chain: {:?}",
-        wallet_address, typed_chain_id
-    );
+
     let twitter_user: twitter_v2::User = twitter_api
         .get_users_me()
         .send()
@@ -269,11 +268,41 @@ pub async fn faucet(
     );
 
     if !is_following_webb {
-        return Err(Error::Custom(
+        Err(Error::Custom(
             "User is not following the webb twitter account".to_string(),
-        ));
+        ))
+    } else {
+        Ok(twitter_user)
     }
+}
 
+#[post("/faucet", data = "<payload>")]
+#[allow(clippy::too_many_arguments)]
+pub async fn faucet(
+    app_config: &State<crate::AppConfig>,
+    twitter_bearer_token: auth::TwitterBearerToken<'_>,
+    payload: Json<Payload>,
+    auth_db: &State<SledAuthDb>,
+    evm_providers: &State<EvmProviders<EthersClient>>,
+    substrate_providers: &State<
+        SubstrateProviders<OnlineClient<PolkadotConfig>>,
+    >,
+    evm_wallet: &State<Wallet<SigningKey>>,
+    signer_pair: &State<subxt_signer::sr25519::Keypair>,
+    tx_sender: &State<UnboundedSender<Transaction>>,
+) -> Result<status::Custom<String>, Error> {
+    let twitter_user = check_twitter(app_config, twitter_bearer_token).await?;
+    let faucet_data = payload.clone().into_inner().faucet;
+    // Extract faucet request fields
+    let FaucetRequest {
+        wallet_address,
+        typed_chain_id,
+        ..
+    } = faucet_data.clone();
+    println!(
+        "Requesting faucet for (address {}, chain: {:?}",
+        wallet_address, typed_chain_id
+    );
     // Check if the user's last claim date is within the last 24 hours
     let claim_data = auth_db
         .get_last_claim_data(twitter_user.id.into(), typed_chain_id)

@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 
 use crate::subxt::utils::H256;
@@ -248,28 +247,31 @@ async fn handle_substrate_native_tx(
 
     println!("Tranasction sent with TxHash: {:?}", tx_hash);
 
-    // let events = tx_result
-    //     .wait_for_finalized_success()
-    //     .await
-    //     .map_err(|e| Error::Custom(e.to_string()))?;
-    // let block_hash = events.block_hash();
+    let tx_block = tx_result
+        .wait_for_in_block()
+        .await
+        .map_err(|e| Error::Custom(e.to_string()))?;
+    let block_hash = tx_block.block_hash();
 
-    // // Find a Transfer event and print it.
-    // let transfer_event = events
-    //     .find_first::<RuntimeApi::balances::events::Transfer>()
-    //     .map_err(|e| Error::Custom(e.to_string()))?;
-    // if let Some(event) = transfer_event {
-    //     let from = event.from;
-    //     let to = event.to;
-    //     let amount = event.amount.div(10u128.pow(18));
-    //     println!("Transfered {amount} tokens {from} -> {to}");
-    // }
+    // Find a Transfer event and print it.
+    let transfer_event = tx_block
+        .fetch_events()
+        .await
+        .map_err(|e| Error::Custom(e.to_string()))?
+        .find_first::<RuntimeApi::balances::events::Transfer>()
+        .map_err(|e| Error::Custom(e.to_string()))?;
+    if let Some(event) = transfer_event {
+        let from = event.from;
+        let to = event.to;
+        let amount = event.amount / (10u128.pow(18));
+        println!("Transfered {amount} tokens {from} -> {to}");
+    }
 
     // Return the transaction hash.
     result_sender
         .send(Ok(TxResult::Substrate {
             tx_hash,
-            block_hash: tx_hash,
+            block_hash,
         }))
         .map_err(|e| {
             Error::Custom(format!("Failed to send tx_hash: {:?}", e))

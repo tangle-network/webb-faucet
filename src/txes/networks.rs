@@ -16,6 +16,7 @@ pub enum Network {
 
     // Substrate
     Tangle,
+    TangleLocal,
 }
 
 impl Network {
@@ -34,6 +35,7 @@ impl Network {
             "demeter" => Some(Self::Demeter),
             "tangle-evm-testnet" => Some(Self::TangleEVMTestnet),
             "tangle" => Some(Self::Tangle),
+            "tangle-local" => Some(Self::TangleLocal),
             _ => None,
         }
     }
@@ -77,6 +79,7 @@ impl Network {
     pub fn from_substrate_chain_id(chain_id: u64) -> Option<Self> {
         match chain_id {
             1081 => Some(Self::Tangle),
+            1082 => Some(Self::TangleLocal),
             _ => None,
         }
     }
@@ -84,6 +87,7 @@ impl Network {
     pub fn to_substrate_chain_id(&self) -> Option<u64> {
         match self {
             Self::Tangle => Some(1081),
+            Self::TangleLocal => Some(1082),
             _ => None,
         }
     }
@@ -103,6 +107,7 @@ impl Network {
     pub fn to_typed_chain_id(&self) -> Option<TypedChainId> {
         match self {
             Self::Tangle => Some(TypedChainId::Substrate(1081)),
+            Self::TangleLocal => Some(TypedChainId::Substrate(1082)),
             Self::ArbitrumGoerli => Some(TypedChainId::Evm(421613)),
             Self::Athena => Some(TypedChainId::Evm(3884533461)),
             Self::Demeter => Some(TypedChainId::Evm(3884533463)),

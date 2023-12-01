@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::subxt::utils::H256;
 use ethers::prelude::ContractCall;
 use ethers::providers::Middleware;
 use ethers::types::{Address, TransactionReceipt, TransactionRequest};
+use rocket::futures::TryFutureExt;
 use rocket::tokio::{self, sync::oneshot};
 use tokio::sync::mpsc::UnboundedReceiver;
 use webb::evm::contract::protocol_solidity::erc20_preset_minter_pauser::ERC20PresetMinterPauserContract;
@@ -207,8 +207,8 @@ async fn handle_substrate_tx(
     asset_id: Option<u32>,
     signer: subxt_signer::sr25519::Keypair,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
-) -> Result<H256, Error> {
-    match asset_id {
+) -> Result<(), Error> {
+    let res = match asset_id {
         Some(asset_id) => Err(Error::Custom(format!(
             "Substrate only supports sending native tokens. Asset ID {} not supported",
             asset_id
@@ -219,11 +219,16 @@ async fn handle_substrate_tx(
                 to,
                 native_token_amount,
                 signer,
-                result_sender,
             )
             .await
         }
-    }
+    };
+
+    // Return the transaction hash.
+    result_sender.send(res).map_err(|e| {
+        Error::Custom(format!("Failed to send tx_hash: {:?}", e))
+    })?;
+    Ok(())
 }
 
 async fn handle_substrate_native_tx(
@@ -231,17 +236,30 @@ async fn handle_substrate_native_tx(
     to: AccountId32,
     amount: u128,
     signer: subxt_signer::sr25519::Keypair,
-    result_sender: oneshot::Sender<Result<TxResult, Error>>,
-) -> Result<H256, Error> {
+) -> Result<TxResult, Error> {
+    const BLOCK_TIME: u64 = 6000; // 6 seconds
     let to_address = MultiAddress::Id(to.clone());
     let balance_transfer_tx =
         RuntimeApi::tx().balances().transfer(to_address, amount);
+    println!(
+        "Sending tx: {}.{}({}, {})",
+        balance_transfer_tx.pallet_name(),
+        balance_transfer_tx.call_name(),
+        to,
+        balance_transfer_tx.call_data().value
+    );
     // Sign and submit the extrinsic.
-    let tx_result = api
-        .tx()
+    let tx_api = api.tx();
+    let tx_result_fut = tx_api
         .sign_and_submit_then_watch_default(&balance_transfer_tx, &signer)
-        .await
-        .map_err(|e| Error::Custom(e.to_string()))?;
+        .map_err(|e| Error::Custom(e.to_string()));
+    let timeout_fut =
+        tokio::time::sleep(std::time::Duration::from_millis(2 * BLOCK_TIME));
+
+    let tx_result = tokio::select! {
+        res = tx_result_fut => res,
+        _ = timeout_fut => Err(Error::Custom("Timed out waiting for tx to be included in block".to_string())),
+    }?;
 
     let tx_hash = tx_result.extrinsic_hash();
 
@@ -256,8 +274,8 @@ async fn handle_substrate_native_tx(
     // Find a Transfer event and print it.
     let transfer_event = tx_block
         .fetch_events()
-        .await
-        .map_err(|e| Error::Custom(e.to_string()))?
+        .map_err(|e| Error::Custom(e.to_string()))
+        .await?
         .find_first::<RuntimeApi::balances::events::Transfer>()
         .map_err(|e| Error::Custom(e.to_string()))?;
     if let Some(event) = transfer_event {
@@ -267,15 +285,8 @@ async fn handle_substrate_native_tx(
         println!("Transfered {amount} tokens {from} -> {to}");
     }
 
-    // Return the transaction hash.
-    result_sender
-        .send(Ok(TxResult::Substrate {
-            tx_hash,
-            block_hash,
-        }))
-        .map_err(|e| {
-            Error::Custom(format!("Failed to send tx_hash: {:?}", e))
-        })?;
-
-    Ok(tx_hash)
+    Ok(TxResult::Substrate {
+        tx_hash,
+        block_hash,
+    })
 }

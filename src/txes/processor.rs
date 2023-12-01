@@ -60,6 +60,7 @@ impl TransactionProcessingSystem {
                         asset_id,
                         signer,
                         result_sender,
+                        timeout,
                     } => {
                         let res = handle_substrate_tx(
                             api,
@@ -68,6 +69,7 @@ impl TransactionProcessingSystem {
                             native_token_amount,
                             asset_id,
                             signer,
+                            timeout,
                             result_sender,
                         )
                         .await;
@@ -199,6 +201,7 @@ async fn handle_evm_token_tx<M: Middleware>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_substrate_tx(
     api: OnlineClient<PolkadotConfig>,
     to: AccountId32,
@@ -206,6 +209,7 @@ async fn handle_substrate_tx(
     native_token_amount: u128,
     asset_id: Option<u32>,
     signer: subxt_signer::sr25519::Keypair,
+    timeout: std::time::Duration,
     result_sender: oneshot::Sender<Result<TxResult, Error>>,
 ) -> Result<(), Error> {
     let res = match asset_id {
@@ -219,6 +223,7 @@ async fn handle_substrate_tx(
                 to,
                 native_token_amount,
                 signer,
+                timeout,
             )
             .await
         }
@@ -236,8 +241,8 @@ async fn handle_substrate_native_tx(
     to: AccountId32,
     amount: u128,
     signer: subxt_signer::sr25519::Keypair,
+    timeout: std::time::Duration,
 ) -> Result<TxResult, Error> {
-    const BLOCK_TIME: u64 = 6000; // 6 seconds
     let to_address = MultiAddress::Id(to.clone());
     let balance_transfer_tx =
         RuntimeApi::tx().balances().transfer(to_address, amount);
@@ -253,12 +258,12 @@ async fn handle_substrate_native_tx(
     let tx_result_fut = tx_api
         .sign_and_submit_then_watch_default(&balance_transfer_tx, &signer)
         .map_err(|e| Error::Custom(e.to_string()));
-    let timeout_fut =
-        tokio::time::sleep(std::time::Duration::from_millis(2 * BLOCK_TIME));
+
+    let timeout_fut = tokio::time::sleep(timeout);
 
     let tx_result = tokio::select! {
         res = tx_result_fut => res,
-        _ = timeout_fut => Err(Error::Custom("Timed out waiting for tx to be included in block".to_string())),
+        _ = timeout_fut => Err(Error::Custom("Timed out waiting for tx to be sent to the network, please try again".to_string())),
     }?;
 
     let tx_hash = tx_result.extrinsic_hash();

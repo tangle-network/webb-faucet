@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ethers::types::U256;
 use ethers::{
@@ -62,6 +63,7 @@ pub enum Transaction {
         native_token_amount: u128,
         asset_id: Option<u32>,
         signer: subxt_signer::sr25519::Keypair,
+        timeout: Duration,
         result_sender: oneshot::Sender<Result<TxResult, Error>>,
     },
 }

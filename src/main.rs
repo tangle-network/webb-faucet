@@ -74,6 +74,10 @@ const fn default_verify_following_webb() -> bool {
     true
 }
 
+const fn default_tx_timeout_ms() -> u64 {
+    18_000 // 3 blocks
+}
+
 #[derive(Deserialize)]
 pub struct AppConfig {
     /// The database to use for the auth and claims
@@ -93,6 +97,10 @@ pub struct AppConfig {
     /// Whether to verify that the user is following the webb twitter account
     #[serde(default = "default_verify_following_webb")]
     pub verify_following_webb: bool,
+    /// The timeout for transactions in milliseconds
+    /// This is to prevent the faucet from hanging
+    #[serde(default = "default_tx_timeout_ms")]
+    pub tx_timeout: u64,
 }
 
 fn auth_db_firing() -> impl Fairing {

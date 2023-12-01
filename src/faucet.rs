@@ -117,6 +117,9 @@ pub async fn handle_token_transfer(
                     .as_u128(),
                     asset_id: None,
                     signer: signer_pair.inner().clone(),
+                    timeout: std::time::Duration::from_millis(
+                        app_config.tx_timeout,
+                    ),
                     result_sender,
                 })
                 .expect("Failed to send transaction to processor");

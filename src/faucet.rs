@@ -335,26 +335,9 @@ pub async fn faucet(
         }
     }
 
-    let claim: ClaimsData = ClaimsData {
-        identity: twitter_user.id.into(),
-        address: wallet_address.clone().into(),
-        last_claimed_date: now,
-    };
-
-    auth_db
-        .put_last_claim_data(twitter_user.id.into(), typed_chain_id, claim)
-        .await?;
-    // Process the claim and build the response
     println!(
-        "{:?}  Claiming for user: {:?}",
-        Utc::now().to_rfc3339(),
+        "Paying {} ({wallet_address}) on chain: {typed_chain_id:?}",
         twitter_user.username,
-    );
-    println!(
-        "{:?} Paying {} on chain: {:?}",
-        Utc::now().to_rfc3339(),
-        wallet_address,
-        typed_chain_id
     );
 
     match handle_token_transfer(
@@ -368,17 +351,38 @@ pub async fn faucet(
     )
     .await
     {
-        Ok(tx_result) => Ok(status::Custom(
-            Status::Ok,
-            json!({
-                "wallet": wallet_address,
-                "typed_chain_id": typed_chain_id,
-                "last_claimed_date": now,
-                "user": twitter_user,
-                "tx_result": tx_result,
-            })
-            .to_string(),
-        )),
+        Ok(tx_result) => {
+            let claim: ClaimsData = ClaimsData {
+                identity: twitter_user.id.into(),
+                address: wallet_address.clone().into(),
+                last_claimed_date: now,
+            };
+
+            auth_db
+                .put_last_claim_data(
+                    twitter_user.id.into(),
+                    typed_chain_id,
+                    claim,
+                )
+                .await?;
+            println!(
+                "{:?} Paid {} on chain: {:?}",
+                Utc::now().to_rfc3339(),
+                wallet_address,
+                typed_chain_id
+            );
+            Ok(status::Custom(
+                Status::Ok,
+                json!({
+                    "wallet": wallet_address,
+                    "typed_chain_id": typed_chain_id,
+                    "last_claimed_date": now,
+                    "user": twitter_user,
+                    "tx_result": tx_result,
+                })
+                .to_string(),
+            ))
+        }
         Err(e) => {
             rocket::log::private::error!("Error transferring tokens: {e:?}");
             Ok(status::Custom(

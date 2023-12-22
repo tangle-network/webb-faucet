@@ -1,4 +1,6 @@
 use chrono::{DateTime, Utc};
+use ethers_core::types::Address;
+use sp_core::crypto::{AccountId32, Ss58Codec};
 
 #[derive(
     Copy,
@@ -54,6 +56,34 @@ impl UniversalWalletAddress {
     #[must_use]
     pub fn is_substrate(&self) -> bool {
         matches!(self, Self::Substrate(..))
+    }
+
+    pub fn as_ethereum(&self) -> Option<Address> {
+        if let Self::Ethereum(v) = self {
+            Some(Address::from(*v))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_substrate(&self) -> Option<AccountId32> {
+        if let Self::Substrate(v) = self {
+            Some(AccountId32::from(*v))
+        } else {
+            None
+        }
+    }
+}
+
+impl core::fmt::Display for UniversalWalletAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown => write!(f, "Unknown"),
+            Self::Ethereum(v) => write!(f, "{:?}", Address::from(*v)),
+            Self::Substrate(v) => {
+                write!(f, "{}", AccountId32::from(*v).to_ss58check())
+            }
+        }
     }
 }
 

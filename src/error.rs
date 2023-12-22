@@ -79,7 +79,8 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
                     },
                     Status::InternalServerError,
                 ),
-                webb_auth_sled::Error::InvalidId(_) => (
+                webb_auth_sled::Error::InvalidU65Id(_)
+                | webb_auth_sled::Error::InvalidI65Id(_) => (
                     ErrorResponse {
                         code: FaucetErrorCode::DataSerializationError,
                         message: self.to_string(),

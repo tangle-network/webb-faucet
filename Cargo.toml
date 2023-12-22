@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "auth", "auth-sled"]
+members = [".", "auth", "auth-sled", "db-cli"]
 
 [package]
 name = "webb-faucet"

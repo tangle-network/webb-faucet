@@ -53,7 +53,7 @@ impl Network {
             3884533461 => Some(Self::Athena),
             3884533462 => Some(Self::Hermes),
             3884533463 => Some(Self::Demeter),
-            4006 => Some(Self::TangleEVMTestnet),
+            3799 => Some(Self::TangleEVMTestnet),
             _ => None,
         }
     }
@@ -71,23 +71,23 @@ impl Network {
             Self::Athena => Some(3884533461),
             Self::Hermes => Some(3884533462),
             Self::Demeter => Some(3884533463),
-            Self::TangleEVMTestnet => Some(4006),
+            Self::TangleEVMTestnet => Some(3799),
             _ => None,
         }
     }
 
     pub fn from_substrate_chain_id(chain_id: u64) -> Option<Self> {
         match chain_id {
-            1081 => Some(Self::Tangle),
-            1082 => Some(Self::TangleLocal),
+            3799 => Some(Self::Tangle),
+            3800 => Some(Self::TangleLocal),
             _ => None,
         }
     }
 
     pub fn to_substrate_chain_id(&self) -> Option<u64> {
         match self {
-            Self::Tangle => Some(1081),
-            Self::TangleLocal => Some(1082),
+            Self::Tangle => Some(3799),
+            Self::TangleLocal => Some(3800),
             _ => None,
         }
     }
@@ -106,12 +106,12 @@ impl Network {
 
     pub fn to_typed_chain_id(&self) -> Option<TypedChainId> {
         match self {
-            Self::Tangle => Some(TypedChainId::Substrate(1081)),
-            Self::TangleLocal => Some(TypedChainId::Substrate(1082)),
+            Self::Tangle => Some(TypedChainId::Substrate(3799)),
+            Self::TangleLocal => Some(TypedChainId::Substrate(3800)),
             Self::ArbitrumGoerli => Some(TypedChainId::Evm(421613)),
             Self::Athena => Some(TypedChainId::Evm(3884533461)),
             Self::Demeter => Some(TypedChainId::Evm(3884533463)),
-            Self::TangleEVMTestnet => Some(TypedChainId::Evm(4006)),
+            Self::TangleEVMTestnet => Some(TypedChainId::Evm(3799)),
             Self::Goerli => Some(TypedChainId::Evm(5)),
             Self::Hermes => Some(TypedChainId::Evm(3884533462)),
             Self::MoonbaseAlpha => Some(TypedChainId::Evm(1287)),
